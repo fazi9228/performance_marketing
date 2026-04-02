@@ -12,6 +12,7 @@ SHEET_AD_PERFORMANCE = "Ad_Performance"
 
 # ── Local Paths ───────────────────────────────────────────────────────────────
 INPUT_DIR   = "./input"
+ARCHIVE_DIR = "./input/archive"
 OUTPUT_DIR  = "./output"
 OUTPUT_FILE = os.path.join(OUTPUT_DIR, "Pepperstone_APAC_Performance_Master.xlsx")
 
@@ -25,6 +26,10 @@ FILE_PATTERNS = {
     "tradingview" : "TradingView_",
     "ql"          : "QL_",
     "ft"          : "FT_",
+    "apple"       : "Apple_",
+    "tiktok"      : "Tiktok_",
+    "douyin"      : "Douyin_",
+    "affiliates"  : "Affiliates_",
 }
 
 # ── Country Mappings ──────────────────────────────────────────────────────────
@@ -36,6 +41,16 @@ ADROLL_COUNTRY_MAP = {
     "Thailand"  : "TH",
     "Vietnam"   : "VN",
     "Singapore" : "SG",
+}
+
+APPLE_COUNTRY_MAP = {
+    "Hong Kong" : "HK",
+    "Taiwan"    : "TW",
+    "Thailand"  : "TH",
+    "Vietnam"   : "VN",
+    "Singapore" : "SG",
+    "Malaysia"  : "MY",
+    "China"     : "CN",
 }
 
 # ── Channel Label Rules ───────────────────────────────────────────────────────
@@ -58,6 +73,11 @@ REDNOTE_CHANNEL     = "RedNote"
 BILIBILI_COUNTRY    = "CN"
 TRADINGVIEW_CHANNEL = "TradingView"
 TRADINGVIEW_FX_RATE = 1.58  # USD to AUD — update monthly
+
+APPLE_CHANNEL       = "Apple Search Ads"   # spend already in AUD, no FX needed
+TIKTOK_CHANNEL      = "TikTok"             # spend already in AUD, no FX needed
+DOUYIN_CHANNEL      = "Douyin"             # Chinese TikTok — spend in AUD, country always CN
+DOUYIN_COUNTRY      = "CN"
 
 # ── UTM → (Channel, Channel_Group) mapping ───────────────────────────────────
 # For QL/FT rows from Salesforce. Numeric IDs → IB. Blank/- → Organic.
@@ -92,6 +112,7 @@ UTM_TO_CHANNEL = {
     "coccoc-display"               : ("coccoc",           "Others"),
     "instagram-organic-display"    : ("Meta",             "Meta"),
     "adroll-display"               : ("AdRoll",           "AdRoll"),
+    "apple search ads"             : ("Apple Search Ads", "Apple Search Ads"),
 }
 
 # ── Channel → Channel_Group mapping for ad channels ──────────────────────────
@@ -107,13 +128,17 @@ AD_CHANNEL_GROUP = {
     "BiliBili"             : "BiliBili",
     "RedNote"              : "RedNote",
     "TradingView"          : "TradingView",
+    "Apple Search Ads"     : "Apple Search Ads",
+    "TikTok"               : "TikTok",
+    "Douyin"               : "Douyin",
+    "Affiliates"            : "Affiliates",
 }
 
 # ── Master Sheet Columns ──────────────────────────────────────────────────────
 AD_PERFORMANCE_COLS = [
     "Date", "Country", "Channel", "Campaign", "Creative",
     "Impressions", "Clicks", "CTR", "Spend (AUD)",
-    "QL", "FT", "Channel_Group"
+    "QL", "FT", "Channel_Group", "Date_Added"
 ]
 
 # ── Deduplication Keys ────────────────────────────────────────────────────────
