@@ -137,7 +137,8 @@ def parse_bing(filepath):
         df["FT"]         = None
         df["Creative"]   = None
         df["Date_Added"] = None
-        out = df[["Date","Country","Channel","Campaign","Creative","Impressions","Clicks","CTR","Spend","QL","FT","Channel_Group","Date_Added"]].copy()
+        df["Date_Modified"] = None
+        out = df[["Date","Country","Channel","Campaign","Creative","Impressions","Clicks","CTR","Spend","QL","FT","Channel_Group","Date_Added","Date_Modified"]].copy()
         out.columns = AD_PERFORMANCE_COLS
         return out, None
     except Exception as e:
@@ -226,8 +227,9 @@ def parse_adroll(filepath):
         df["FT"]         = None
         df["Creative"]   = None
         df["Date_Added"] = None
+        df["Date_Modified"] = None
         df = df.rename(columns={spend_col: "Spend (AUD)"})
-        out = df[["Date","Country","Channel","Campaign","Creative","Impressions","Clicks","CTR","Spend (AUD)","QL","FT","Channel_Group","Date_Added"]].copy()
+        out = df[["Date","Country","Channel","Campaign","Creative","Impressions","Clicks","CTR","Spend (AUD)","QL","FT","Channel_Group","Date_Added","Date_Modified"]].copy()
         out.columns = AD_PERFORMANCE_COLS
         return out, None
     except Exception as e:
@@ -754,6 +756,7 @@ def parse_ql_ft(ql_path, ft_path):
         merged['CTR']         = None
         merged['Spend (AUD)'] = None
         merged['Date_Added']  = None
+        merged['Date_Modified'] = None
         merged = merged.sort_values(['Date','Country','Channel']).reset_index(drop=True)
         return merged[AD_PERFORMANCE_COLS], None
 
