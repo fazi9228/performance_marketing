@@ -4,6 +4,7 @@ Pepperstone APAC Performance Marketing Pipeline
 
 from parsers import parse_all
 from uploader import upload_to_sheets, save_run_snapshot
+from bq_uploader import upload_to_bigquery
 from config import GOOGLE_SHEET_ID, OUTPUT_FILE
 
 def main():
@@ -11,7 +12,7 @@ def main():
     print("  Pepperstone APAC Performance Marketing Pipeline")
     print("=" * 55)
 
-    print("\n[1/4] Parsing raw files from ./input/ ...")
+    print("\n[1/5] Parsing raw files from ./input/ ...")
     combined, failed_channels = parse_all()
     ad_rows = combined[combined['QL'].isna() & combined['FT'].isna()]
     ql_rows = combined[combined['QL'].notna() | combined['FT'].notna()]
@@ -21,24 +22,31 @@ def main():
     print(f"      Total FT   : {combined['FT'].fillna(0).astype(int).sum():,}")
     print(f"      Total rows : {len(combined):,}")
 
-    print("\n[2/4] Uploading to Google Sheets ...")
-    success = upload_to_sheets(combined, GOOGLE_SHEET_ID)
+    print("\n[2/5] Uploading to BigQuery ...")
+    bq_success = upload_to_bigquery(combined)
 
-    print("\n[3/4] Saving snapshot ...")
-    if success:
+    print("\n[3/5] Uploading to Google Sheets (backup) ...")
+    sheets_success = upload_to_sheets(combined, GOOGLE_SHEET_ID)
+
+    print("\n[4/5] Saving snapshot ...")
+    if sheets_success:
         save_run_snapshot(GOOGLE_SHEET_ID)
     else:
-        print("      ⚠️  Skipped — upload did not succeed.")
+        print("      ⚠️  Skipped — Sheets upload did not succeed.")
 
-    print("\n[4/4] Done.")
+    print("\n[5/5] Done.")
 
     # ── Final summary ─────────────────────────────────────────────────────────
     print("\n" + "=" * 55)
-    if success:
-        print("✅  Pipeline complete — Google Sheet updated.")
+    if bq_success:
+        print("✅  BigQuery updated.")
     else:
-        print("⚠️  Pipeline complete — Google Sheets upload failed.")
-        print("    Check credentials (see README.md for setup).")
+        print("⚠️  BigQuery upload failed.")
+
+    if sheets_success:
+        print("✅  Google Sheets updated (backup).")
+    else:
+        print("⚠️  Google Sheets upload failed.")
 
     if failed_channels:
         print("\n⚠️  The following channels did NOT update this run:")

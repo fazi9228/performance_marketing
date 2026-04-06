@@ -605,11 +605,13 @@ def parse_affiliate(filepath):
         # Parse date
         df["Date"] = pd.to_datetime(df["Date"], dayfirst=True)
 
-        # APAC only
-        df = df[df["Country"].isin(APAC_COUNTRIES)].copy()
+        # All countries except AU and NZ (domestic, not APAC marketing)
+        EXCLUDE_COUNTRIES = ["AU", "NZ"]
+        df = df[df["Country"].notna()].copy()
+        df = df[~df["Country"].isin(EXCLUDE_COUNTRIES)]
 
         if df.empty:
-            raise ValueError("No APAC rows found.")
+            raise ValueError("No valid rows found.")
 
         df["Date"]          = df["Date"].dt.date
         df["Channel"]       = "Affiliates"
@@ -619,7 +621,12 @@ def parse_affiliate(filepath):
         df["Impressions"]   = None
         df["Clicks"]        = None
         df["CTR"]           = None
-        df["Spend (AUD)"]   = pd.to_numeric(df["Commission"], errors="coerce")
+        df["Spend (AUD)"]   = pd.to_numeric(
+            df["Commission"].astype(str).str.replace("$", "", regex=False)
+                                         .str.replace(",", "", regex=False)
+                                         .str.strip(),
+            errors="coerce"
+        )
         df["QL"]            = pd.to_numeric(df["QL"], errors="coerce").fillna(0).astype(int)
         df["FT"]            = pd.to_numeric(df["FT"], errors="coerce").fillna(0).astype(int)
         df["Date_Added"]    = None

@@ -239,6 +239,10 @@ def _write_tab(sheet, tab_name, new_df, dedup_keys):
 
             if row_changed:
                 n_updated += 1
+                # Also update Date_Modified column
+                if "Date_Modified" in col_name_to_idx:
+                    dm_col = col_name_to_idx["Date_Modified"]
+                    cell_updates.append((sheet_row, dm_col, TODAY))
 
         # Write all cell updates in batches
         if cell_updates:
@@ -495,8 +499,8 @@ def _write_excel(df, filepath):
     ws.title = SHEET_AD_PERFORMANCE
     ws.freeze_panes = "A2"
 
-    headers    = ["Date","Country","Channel","Campaign","Creative","Impressions","Clicks","CTR","Spend (AUD)","QL","FT","Channel_Group","Date_Added"]
-    col_widths = [14, 10, 22, 48, 24, 14, 12, 10, 14, 10, 10, 16, 14]
+    headers    = ["Date","Country","Channel","Campaign","Creative","Impressions","Clicks","CTR","Spend (AUD)","QL","FT","Channel_Group","Date_Added","Date_Modified"]
+    col_widths = [14, 10, 22, 48, 24, 14, 12, 10, 14, 10, 10, 16, 14, 14]
 
     ws.row_dimensions[1].height = 22
     for ci, (h, w) in enumerate(zip(headers, col_widths), 1):
@@ -538,6 +542,8 @@ def _write_excel(df, filepath):
         c(11, str(row.Channel_Group) if pd.notna(row.Channel_Group) else "", LEFT)
         da   = getattr(row,"Date_Added",None)
         c(12, str(da) if pd.notna(da) and str(da) not in ('', 'nan', 'None') else "", LEFT)
+        dm   = getattr(row,"Date_Modified",None)
+        c(13, str(dm) if pd.notna(dm) and str(dm) not in ('', 'nan', 'None') else "", LEFT)
 
     for ri in range(2, len(df)+2):
         ws.cell(ri,5).number_format = "#,##0"
