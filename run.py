@@ -1,5 +1,5 @@
 """
-Pepperstone APAC Performance Marketing Pipeline
+Pepperstone APAC Performance Marketing Pipeline - remove Gsheet upload
 
 Flow:
   1. Parse raw files from ./input/ (or S3 folder)
