@@ -376,13 +376,13 @@ def parse_rednote(filepath):
         xl = pd.ExcelFile(filepath)
         sheet = xl.sheet_names[0]
         for s in xl.sheet_names:
-            sl = s.lower()
-            if "daily" not in sl and "reference" not in sl and "참고" not in sl:
+            if s.lower() == "daily":
                 sheet = s; break
         df = xl.parse(sheet)
         xl.close()
         df["Channel"]       = REDNOTE_CHANNEL
         df["Channel_Group"] = "RedNote"
+        df["Country"]       = df["Country"].astype(str).str.strip().str.upper() if "Country" in df.columns else None
         df["Campaign"]      = df["Main Account"].astype(str) + " - " + df["Placement"].astype(str)
         df["Date"]          = pd.to_datetime(df["Date"], errors="coerce")
         df = df[df["Date"].notna()].copy()
