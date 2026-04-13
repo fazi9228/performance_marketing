@@ -89,41 +89,67 @@ DOUYIN_COUNTRY      = "CN"
 
 # ── UTM → (Channel, Channel_Group) mapping ───────────────────────────────────
 # For QL/FT rows from Salesforce. Numeric IDs → IB. Blank/- → Organic.
+# Source: PM_report_master mapping sheet.
 # NOTE: Exact-match dict is checked first; substring rules in parsers.py
-# catch anything containing "bing", "apple", "tiktok", etc.
+# catch future UTM variants containing "bing", "google", "apple", "tiktok", etc.
 UTM_TO_CHANNEL = {
-    "direct-deal-followme"         : ("follow me",            "Others"),
-    "direct-deal-mt5"              : ("metaquotes",           "Others"),
-    "direct-deal-myfxbook"         : ("myfxbook",             "Others"),
-    "direct-deal-fxstreet"         : ("fxstreet",             "Others"),
-    "direct-deal-tradingview"      : ("TradingView",         "TradingView"),
-    "direct-deal-forexfactory"     : ("forexfactory",         "Others"),
-    "bing-search-category"         : ("Bing",                 "Bing"),
-    "bing-search-brand"            : ("Bing",                 "Bing"),
-    "bing-performance-max-category": ("Bing",                 "Bing"),
-    "bing"                         : ("Bing",                 "Bing"),
-    "google"                       : ("Google",               "Others"),
-    "google-search-brand"          : ("Google",               "Others"),
-    "google-play"                  : ("Google",               "Others"),
-    "tradingview"                  : ("TradingView",         "TradingView"),
-    "ctrader-eu"                   : ("ctrader",              "Others"),
-    "mt5"                          : ("mt5 terminal app",     "Others"),
-    "mt4"                          : ("mt4",                  "Others"),
-    "chatgpt.com"                  : ("chatgpt",              "Others"),
-    "perplexity"                   : ("perplexity",           "Others"),
-    "youtube-video"                : ("youtube",              "Others"),
-    "fx110"                        : ("fx110",                "Others"),
-    "zalo"                         : ("zalo",                 "Others"),
-    "line"                         : ("line",                 "Others"),
-    "email"                        : ("email",                "Others"),
-    "sendgrid"                     : ("email",                "Others"),
-    "sfmc"                         : ("email",                "Others"),
-    "transactional"                : ("email",                "Others"),
-    "coccoc-display"               : ("coccoc",               "Others"),
-    "instagram-organic-display"    : ("Meta",                 "Meta"),
-    "adroll-display"               : ("AdRoll",               "AdRoll"),
-    "apple search ads"             : ("Apple Search Ads",     "Apple Search Ads"),
-    "tiktok"                       : ("TikTok",               "TikTok"),
+    # ── Bing ──────────────────────────────────────────────────────────────
+    "bing"                          : ("Bing",             "Bing"),
+    "bing-search-category"          : ("Bing",             "Bing"),
+    "bing-search-brand"             : ("Bing",             "Bing"),
+    "bing-performance-max-category" : ("Bing",             "Bing"),
+    "bing-performance-max-brand"    : ("Bing",             "Bing"),
+    # ── Google ────────────────────────────────────────────────────────────
+    "google"                        : ("Google",           "Google"),
+    "google-search-brand"           : ("Google",           "Google"),
+    "google-search-category"        : ("Google",           "Google"),
+    "google-performance-max-brand"  : ("Google",           "Google"),
+    "google-performance-max-category": ("Google",          "Google"),
+    "google-video"                  : ("Google",           "Google"),
+    "google-play"                   : ("Google",           "Google"),
+    "youtube-video"                 : ("YouTube",           "YouTube"),
+    # ── TradingView ───────────────────────────────────────────────────────
+    "tradingview"                   : ("TradingView",      "TradingView"),
+    "direct-deal-tradingview"       : ("TradingView",      "TradingView"),
+    "direct-deal-tradingview-profile": ("TradingView",     "TradingView"),
+    # ── CocCoc ────────────────────────────────────────────────────────────
+    "coccoc"                        : ("CocCoc",           "CocCoc"),
+    "coccoc-display"                : ("CocCoc",           "CocCoc"),
+    "coccoc-logo"                   : ("CocCoc",           "CocCoc"),
+    "coccoc-search-brand"           : ("CocCoc",           "CocCoc"),
+    "coccoc-search-category"        : ("CocCoc",           "CocCoc"),
+    # ── Meta ──────────────────────────────────────────────────────────────
+    "instagram-organic-display"     : ("Meta",             "Meta"),
+    # ── AdRoll ────────────────────────────────────────────────────────────
+    "adroll-display"                : ("AdRoll",           "AdRoll"),
+    # ── Apple ─────────────────────────────────────────────────────────────
+    "apple search ads"              : ("Apple Search Ads", "Apple Search Ads"),
+    # ── BiliBili ──────────────────────────────────────────────────────────
+    "bili-video"                    : ("BiliBili",         "BiliBili"),
+    # ── TikTok ────────────────────────────────────────────────────────────
+    "tiktok"                        : ("TikTok",           "TikTok"),
+    # ── ChatGPT ───────────────────────────────────────────────────────────
+    "chatgpt.com"                   : ("ChatGPT",          "ChatGPT"),
+    # ── Others ────────────────────────────────────────────────────────────
+    "direct-deal-followme"          : ("Follow Me",        "Others"),
+    "follow me"                     : ("Follow Me",        "Others"),
+    "direct-deal-mt5"               : ("metaquotes",       "Others"),
+    "direct-deal-myfxbook"          : ("myfxbook",         "Others"),
+    "direct-deal-fxstreet"          : ("fxstreet",         "Others"),
+    "direct-deal-forexfactory"      : ("forexfactory",     "Others"),
+    "direct-deal-foodpanda"         : ("FoodPanda",        "Others"),
+    "direct-deal-investopedia"      : ("Investopedia",     "Others"),
+    "ctrader-eu"                    : ("ctrader",          "Others"),
+    "mt5"                           : ("mt5 terminal app", "Others"),
+    "mt4"                           : ("mt4",              "Others"),
+    "perplexity"                    : ("perplexity",       "Others"),
+    "fx110"                         : ("FX110",            "Others"),
+    "zalo"                          : ("zalo",             "Others"),
+    "line"                          : ("Line",             "Others"),
+    "email"                         : ("email",            "Others"),
+    "sendgrid"                      : ("email",            "Others"),
+    "sfmc"                          : ("email",            "Others"),
+    "transactional"                 : ("email",            "Others"),
 }
 
 # ── Channel → Channel_Group mapping for ad channels ──────────────────────────
@@ -131,6 +157,7 @@ AD_CHANNEL_GROUP = {
     "Bing - Brand"         : "Bing",
     "Bing - Category"      : "Bing",
     "Bing - PMax"          : "Bing",
+    "Bing"                 : "Bing",
     "Meta"                 : "Meta",
     "Meta - Agency"        : "Meta",
     "AdRoll - Retargeting" : "AdRoll",
@@ -144,6 +171,10 @@ AD_CHANNEL_GROUP = {
     "TikTok"               : "TikTok",
     "Douyin"               : "Douyin",
     "Affiliates"           : "Affiliates",
+    "Google"               : "Google",
+    "CocCoc"               : "CocCoc",
+    "ChatGPT"              : "ChatGPT",
+    "YouTube"              : "YouTube",
 }
 
 # ── Master Sheet Columns ──────────────────────────────────────────────────────

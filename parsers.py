@@ -90,14 +90,18 @@ def map_utm(utm):
         return UTM_TO_CHANNEL[ul]
 
     # ── Substring-based fallback ──────────────────────────────────────────
-    # Catches any UTM variant containing these keywords (e.g. "bing-remarketing",
-    # "apple-search-ads-th", "tiktok-lead-gen", etc.)
-    # Google is intentionally left out — awaiting PM manager confirmation.
+    # Catches any future UTM variant containing these keywords
+    # e.g. "bing-remarketing", "google-display-vn", "chatgpt-referral", etc.
     _SUBSTRING_RULES = [
+        ("youtube",   ("YouTube",           "YouTube")),
+        ("google",    ("Google",           "Google")),
         ("bing",      ("Bing",             "Bing")),
         ("apple",     ("Apple Search Ads", "Apple Search Ads")),
         ("tiktok",    ("TikTok",           "TikTok")),
+        ("chatgpt",   ("ChatGPT",          "ChatGPT")),
+        ("coccoc",    ("CocCoc",           "CocCoc")),
         ("adroll",    ("AdRoll",           "AdRoll")),
+        ("tradingview", ("TradingView",    "TradingView")),
     ]
     for keyword, mapping in _SUBSTRING_RULES:
         if keyword in ul:
@@ -612,7 +616,7 @@ def parse_douyin(filepath):
         if df.empty:
             raise ValueError("No valid rows found.")
 
-        df["Country"]       = DOUYIN_COUNTRY
+        df["Country"]       = df["Country"].astype(str).str.strip().str.upper()
         df["Channel"]       = DOUYIN_CHANNEL
         df["Channel_Group"] = get_channel_group(DOUYIN_CHANNEL)
         df["Date"]          = pd.to_datetime(df["Date"]).dt.date
