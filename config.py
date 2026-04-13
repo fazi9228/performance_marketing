@@ -24,22 +24,23 @@ OUTPUT_FILE = os.path.join(OUTPUT_DIR, "Pepperstone_APAC_Performance_Master.xlsx
 
 # ── File Name Patterns ────────────────────────────────────────────────────────
 FILE_PATTERNS = {
-    "bing"        : "Bing_",
-    "meta"        : "Meta_",
-    "adroll"      : "Adroll_",
-    "bilibili"    : "Bilibili_",
-    "rednote"     : "Rednote_",
-    "tradingview" : "TradingView_",
-    "ql"          : "QL_",
-    "ft"          : "FT_",
-    "apple"       : "Apple_",
-    "tiktok"      : "Tiktok_",
-    "douyin"      : "Douyin_",
-    "affiliates"  : "Affiliates_",
+    "bing"         : "Bing_",
+    "meta"         : "Meta_",
+    "meta_agency"  : "Meta_Agency_",
+    "adroll"       : "Adroll_",
+    "bilibili"     : "Bilibili_",
+    "rednote"      : "Rednote_",
+    "tradingview"  : "TradingView_",
+    "ql"           : "QL_",
+    "ft"           : "FT_",
+    "apple"        : "Apple_",
+    "tiktok"       : "Tiktok_",
+    "douyin"       : "Douyin_",
+    "affiliates"   : "Affiliates_",
 }
 
 # ── Country Mappings ──────────────────────────────────────────────────────────
-APAC_COUNTRIES = ["VN", "TH", "SG", "MY", "CN", "HK", "TW"]
+APAC_COUNTRIES = ["VN", "TH", "SG", "MY", "CN", "HK", "TW", "IN", "ID", "PH", "MN"]
 
 ADROLL_COUNTRY_MAP = {
     "Hong Kong" : "HK",
@@ -73,12 +74,13 @@ ADROLL_CHANNEL_RULES = {
     "default"     : "AdRoll",
 }
 
-META_CHANNEL        = "Meta"
-BILIBILI_CHANNEL    = "BiliBili"
-REDNOTE_CHANNEL     = "RedNote"
-BILIBILI_COUNTRY    = "CN"
-TRADINGVIEW_CHANNEL = "TradingView"
-TRADINGVIEW_FX_RATE = 1.58  # USD to AUD — update monthly
+META_CHANNEL          = "Meta"
+META_AGENCY_CHANNEL   = "Meta - Agency"
+BILIBILI_CHANNEL      = "BiliBili"
+REDNOTE_CHANNEL       = "RedNote"
+BILIBILI_COUNTRY      = "CN"
+TRADINGVIEW_CHANNEL   = "TradingView"
+TRADINGVIEW_FX_RATE   = 1.58  # USD to AUD — update monthly
 
 APPLE_CHANNEL       = "Apple Search Ads"   # spend already in AUD, no FX needed
 TIKTOK_CHANNEL      = "TikTok"             # spend already in AUD, no FX needed
@@ -87,38 +89,41 @@ DOUYIN_COUNTRY      = "CN"
 
 # ── UTM → (Channel, Channel_Group) mapping ───────────────────────────────────
 # For QL/FT rows from Salesforce. Numeric IDs → IB. Blank/- → Organic.
+# NOTE: Exact-match dict is checked first; substring rules in parsers.py
+# catch anything containing "bing", "apple", "tiktok", etc.
 UTM_TO_CHANNEL = {
-    "direct-deal-followme"         : ("follow me",        "Others"),
-    "direct-deal-mt5"              : ("metaquotes",       "Others"),
-    "direct-deal-myfxbook"         : ("myfxbook",         "Others"),
-    "direct-deal-fxstreet"         : ("fxstreet",         "Others"),
-    "direct-deal-tradingview"      : ("TradingView",     "TradingView"),
-    "direct-deal-forexfactory"     : ("forexfactory",     "Others"),
-    "bing-search-category"         : ("Bing",             "Bing"),
-    "bing-search-brand"            : ("Bing",             "Bing"),
-    "bing-performance-max-category": ("Bing",             "Bing"),
-    "bing"                         : ("Bing",             "Bing"),
-    "google"                       : ("Google",           "Others"),
-    "google-search-brand"          : ("Google",           "Others"),
-    "google-play"                  : ("Google",           "Others"),
-    "tradingview"                  : ("TradingView",     "TradingView"),
-    "ctrader-eu"                   : ("ctrader",          "Others"),
-    "mt5"                          : ("mt5 terminal app", "Others"),
-    "mt4"                          : ("mt4",              "Others"),
-    "chatgpt.com"                  : ("chatgpt",          "Others"),
-    "perplexity"                   : ("perplexity",       "Others"),
-    "youtube-video"                : ("youtube",          "Others"),
-    "fx110"                        : ("fx110",            "Others"),
-    "zalo"                         : ("zalo",             "Others"),
-    "line"                         : ("line",             "Others"),
-    "email"                        : ("email",            "Others"),
-    "sendgrid"                     : ("email",            "Others"),
-    "sfmc"                         : ("email",            "Others"),
-    "transactional"                : ("email",            "Others"),
-    "coccoc-display"               : ("coccoc",           "Others"),
-    "instagram-organic-display"    : ("Meta",             "Meta"),
-    "adroll-display"               : ("AdRoll",           "AdRoll"),
-    "apple search ads"             : ("Apple Search Ads", "Apple Search Ads"),
+    "direct-deal-followme"         : ("follow me",            "Others"),
+    "direct-deal-mt5"              : ("metaquotes",           "Others"),
+    "direct-deal-myfxbook"         : ("myfxbook",             "Others"),
+    "direct-deal-fxstreet"         : ("fxstreet",             "Others"),
+    "direct-deal-tradingview"      : ("TradingView",         "TradingView"),
+    "direct-deal-forexfactory"     : ("forexfactory",         "Others"),
+    "bing-search-category"         : ("Bing",                 "Bing"),
+    "bing-search-brand"            : ("Bing",                 "Bing"),
+    "bing-performance-max-category": ("Bing",                 "Bing"),
+    "bing"                         : ("Bing",                 "Bing"),
+    "google"                       : ("Google",               "Others"),
+    "google-search-brand"          : ("Google",               "Others"),
+    "google-play"                  : ("Google",               "Others"),
+    "tradingview"                  : ("TradingView",         "TradingView"),
+    "ctrader-eu"                   : ("ctrader",              "Others"),
+    "mt5"                          : ("mt5 terminal app",     "Others"),
+    "mt4"                          : ("mt4",                  "Others"),
+    "chatgpt.com"                  : ("chatgpt",              "Others"),
+    "perplexity"                   : ("perplexity",           "Others"),
+    "youtube-video"                : ("youtube",              "Others"),
+    "fx110"                        : ("fx110",                "Others"),
+    "zalo"                         : ("zalo",                 "Others"),
+    "line"                         : ("line",                 "Others"),
+    "email"                        : ("email",                "Others"),
+    "sendgrid"                     : ("email",                "Others"),
+    "sfmc"                         : ("email",                "Others"),
+    "transactional"                : ("email",                "Others"),
+    "coccoc-display"               : ("coccoc",               "Others"),
+    "instagram-organic-display"    : ("Meta",                 "Meta"),
+    "adroll-display"               : ("AdRoll",               "AdRoll"),
+    "apple search ads"             : ("Apple Search Ads",     "Apple Search Ads"),
+    "tiktok"                       : ("TikTok",               "TikTok"),
 }
 
 # ── Channel → Channel_Group mapping for ad channels ──────────────────────────
@@ -127,6 +132,7 @@ AD_CHANNEL_GROUP = {
     "Bing - Category"      : "Bing",
     "Bing - PMax"          : "Bing",
     "Meta"                 : "Meta",
+    "Meta - Agency"        : "Meta",
     "AdRoll - Retargeting" : "AdRoll",
     "AdRoll - Lookalike"   : "AdRoll",
     "AdRoll - Contextual"  : "AdRoll",
@@ -137,7 +143,7 @@ AD_CHANNEL_GROUP = {
     "Apple Search Ads"     : "Apple Search Ads",
     "TikTok"               : "TikTok",
     "Douyin"               : "Douyin",
-    "Affiliates"            : "Affiliates",
+    "Affiliates"           : "Affiliates",
 }
 
 # ── Master Sheet Columns ──────────────────────────────────────────────────────

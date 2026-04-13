@@ -8,7 +8,8 @@ import pandas as pd
 from config import (
     INPUT_DIR, ARCHIVE_DIR, FILE_PATTERNS,
     BING_CHANNEL_RULES, ADROLL_CHANNEL_RULES, ADROLL_COUNTRY_MAP,
-    META_CHANNEL, BILIBILI_CHANNEL, REDNOTE_CHANNEL, BILIBILI_COUNTRY,
+    META_CHANNEL, META_AGENCY_CHANNEL,
+    BILIBILI_CHANNEL, REDNOTE_CHANNEL, BILIBILI_COUNTRY,
     TRADINGVIEW_CHANNEL, TRADINGVIEW_FX_RATE,
     APPLE_CHANNEL, APPLE_COUNTRY_MAP,
     TIKTOK_CHANNEL,
@@ -84,8 +85,24 @@ def map_utm(utm):
         return ("Affiliates", "Affiliates")
     if ul in ('fb', 'ig') or ul.startswith('facebook') or ul.startswith('instagram'):
         return ("Meta", "Meta")
+    # Known UTM mappings (exact match)
     if ul in UTM_TO_CHANNEL:
         return UTM_TO_CHANNEL[ul]
+
+    # ── Substring-based fallback ──────────────────────────────────────────
+    # Catches any UTM variant containing these keywords (e.g. "bing-remarketing",
+    # "apple-search-ads-th", "tiktok-lead-gen", etc.)
+    # Google is intentionally left out — awaiting PM manager confirmation.
+    _SUBSTRING_RULES = [
+        ("bing",      ("Bing",             "Bing")),
+        ("apple",     ("Apple Search Ads", "Apple Search Ads")),
+        ("tiktok",    ("TikTok",           "TikTok")),
+        ("adroll",    ("AdRoll",           "AdRoll")),
+    ]
+    for keyword, mapping in _SUBSTRING_RULES:
+        if keyword in ul:
+            return mapping
+
     return (u, "Others")
 
 def map_utm_medium(utm, medium):
@@ -183,6 +200,79 @@ def parse_meta(filepath):
         return std_cols(df), None
     except Exception as e:
         print(f"      ❌ Meta parse error: {e}")
+        return empty_df(), str(e)
+
+
+# ── META AGENCY ───────────────────────────────────────────────────────────────
+
+def parse_meta_agency(filepath):
+    """
+    Parser for agency-managed Meta ads (SCB / external agency).
+    File format: Date, Country, Campaign name, Ad set name,
+                 Amount spent (AUD), Impressions, Clicks (all)
+    Note: uses 'Date' column (not 'Day'), and has no CTR column.
+    """
+    try:
+        xl = pd.ExcelFile(filepath)
+        sheet = xl.sheet_names[0]
+        for s in xl.sheet_names:
+            sl = s.lower()
+            if "daily" in sl or "raw" in sl or "data" in sl:
+                sheet = s; break
+        df = xl.parse(sheet)
+        xl.close()
+
+        # Filter to APAC countries
+        if "Country" in df.columns:
+            df = df[df["Country"].isin(APAC_COUNTRIES)]
+
+        # Date column (agency file uses 'Date', not 'Day')
+        date_col = "Date" if "Date" in df.columns else "Day"
+        df["Date"] = pd.to_datetime(df[date_col], errors="coerce")
+        df = df[df["Date"].notna()].copy()
+        df["Date"] = df["Date"].dt.date
+
+        df["Channel"]       = META_AGENCY_CHANNEL
+        df["Channel_Group"] = "Meta"
+        df["QL"]            = None
+        df["FT"]            = None
+        df["Creative"]      = None
+        df["Date_Added"]    = None
+        df["Date_Modified"] = None
+
+        # Clicks
+        clicks_col = "Clicks (all)" if "Clicks (all)" in df.columns else "Clicks"
+        df["Clicks"] = pd.to_numeric(df.get(clicks_col), errors="coerce")
+
+        # Impressions
+        df["Impressions"] = pd.to_numeric(df.get("Impressions"), errors="coerce")
+
+        # Campaign: combine campaign + ad set
+        if "Ad set name" in df.columns and "Campaign name" in df.columns:
+            df["Campaign"] = df["Campaign name"].astype(str) + " | " + df["Ad set name"].astype(str)
+        elif "Campaign name" in df.columns:
+            df["Campaign"] = df["Campaign name"]
+        else:
+            df["Campaign"] = META_AGENCY_CHANNEL
+
+        # Spend — clean dashes/blanks
+        spend_col = "Amount spent (AUD)" if "Amount spent (AUD)" in df.columns else None
+        if spend_col:
+            df["Spend (AUD)"] = pd.to_numeric(df[spend_col], errors="coerce")
+        else:
+            df["Spend (AUD)"] = None
+
+        # CTR — compute from clicks/impressions (agency file has no CTR column)
+        if "CTR (all)" in df.columns:
+            df["CTR"] = pd.to_numeric(df["CTR (all)"], errors="coerce") / 100
+        elif "CTR" in df.columns:
+            df["CTR"] = pd.to_numeric(df["CTR"], errors="coerce") / 100
+        else:
+            df["CTR"] = (df["Clicks"] / df["Impressions"]).where(df["Impressions"] > 0, other=None)
+
+        return std_cols(df), None
+    except Exception as e:
+        print(f"      ❌ Meta Agency parse error: {e}")
         return empty_df(), str(e)
 
 
@@ -365,11 +455,6 @@ def parse_tradingview(filepath):
 # ── APPLE SEARCH ADS ──────────────────────────────────────────────────────────
 
 def parse_apple(filepath):
-    """
-    Parse Apple Search Ads CSV export.
-    File has 7 metadata header rows before the actual column headers.
-    Spend is already in AUD. No FX conversion needed.
-    """
     try:
         df = pd.read_csv(filepath, skiprows=7)
 
@@ -409,26 +494,13 @@ def parse_apple(filepath):
 # ── TIKTOK ────────────────────────────────────────────────────────────────────
 
 def parse_tiktok(filepath):
-    """
-    Parse TikTok Ads Excel export.
-
-    Supports TWO formats:
-      A) New (2025+): Single 'Daily' sheet with a Country column.
-         Columns: Date, Country, Campaign name, Ad group name, Ad name,
-                  Cost (AUD), Impressions, Clicks (all), …
-      B) Legacy: One sheet per country (TH, TW, VN …).
-         Columns: Week, Campaign name, Ad set name, Amount spent (AUD),
-                  Impressions, Clicks (all), CTR, …
-    """
     try:
         xl = pd.ExcelFile(filepath)
         frames = []
 
-        # ── Detect format ─────────────────────────────────────────────────
         has_daily = "Daily" in xl.sheet_names
         has_country_tabs = any(s.strip().upper() in APAC_COUNTRIES for s in xl.sheet_names)
 
-        # ── Format A: single Daily sheet with Country column ──────────────
         if has_daily and not has_country_tabs:
             df = xl.parse("Daily", header=0)
             df.columns = [c.strip() for c in df.columns]
@@ -447,7 +519,6 @@ def parse_tiktok(filepath):
             df["Date"]          = pd.to_datetime(df["Date"]).dt.date
             df["Campaign"]      = df["Campaign name"].astype(str)
 
-            # Creative: prefer Ad name, fall back to Ad group name
             if "Ad name" in df.columns:
                 df["Creative"] = df["Ad name"].astype(str)
             elif "Ad group name" in df.columns:
@@ -462,7 +533,6 @@ def parse_tiktok(filepath):
             df["Impressions"] = pd.to_numeric(df.get("Impressions"),  errors="coerce")
             df["Clicks"]      = pd.to_numeric(df.get("Clicks (all)"), errors="coerce")
 
-            # Spend: try Cost (AUD) first, then Amount spent (AUD)
             if "Cost (AUD)" in df.columns:
                 df["Spend (AUD)"] = pd.to_numeric(df["Cost (AUD)"], errors="coerce")
             elif "Amount spent (AUD)" in df.columns:
@@ -470,7 +540,6 @@ def parse_tiktok(filepath):
             else:
                 df["Spend (AUD)"] = None
 
-            # CTR: use column if present, otherwise compute
             if "CTR" in df.columns:
                 df["CTR"] = pd.to_numeric(df["CTR"], errors="coerce")
             else:
@@ -479,7 +548,6 @@ def parse_tiktok(filepath):
 
             frames.append(std_cols(df))
 
-        # ── Format B: one sheet per country (legacy) ──────────────────────
         else:
             for sheet in xl.sheet_names:
                 country = sheet.strip().upper()
@@ -532,11 +600,6 @@ def parse_tiktok(filepath):
 # ── DOUYIN ─────────────────────────────────────────────────────────────────────
 
 def parse_douyin(filepath):
-    """
-    Parse Douyin (Chinese TikTok) Excel export.
-    Single 'Daily' sheet. Country is always CN.
-    Video Play → Impressions, Profile Views → Clicks.
-    """
     try:
         xl = pd.ExcelFile(filepath)
         sheet = "Daily" if "Daily" in xl.sheet_names else xl.sheet_names[0]
@@ -554,7 +617,6 @@ def parse_douyin(filepath):
         df["Channel_Group"] = get_channel_group(DOUYIN_CHANNEL)
         df["Date"]          = pd.to_datetime(df["Date"]).dt.date
 
-        # Campaign: Campaign Name | Targeting approach | Creative Type (same pattern as BiliBili)
         df["Campaign"] = (
             df["Campaign Name"].astype(str) + " | " +
             df["Targeting approach"].astype(str) + " | " +
@@ -569,7 +631,6 @@ def parse_douyin(filepath):
         df["Clicks"]      = pd.to_numeric(df.get("Profile Views"),  errors="coerce")
         df["Spend (AUD)"] = pd.to_numeric(df.get("Cost (AUD)"),     errors="coerce")
 
-        # CTR: compute from Profile Views / Video Play
         imp = df["Impressions"]
         df["CTR"] = (df["Clicks"] / imp).where(imp > 0, other=None)
 
@@ -584,13 +645,6 @@ def parse_douyin(filepath):
 # ── AFFILIATES ────────────────────────────────────────────────────────────────
 
 def parse_affiliate(filepath):
-    """
-    Parse Affiliates Excel export.
-    Structure: Date (fills down), Country, Type, Commission, Qualified Lead, Funded Trading Client.
-    APAC countries only. Commission → Spend (AUD). No impressions/clicks/CTR.
-    Added on an ad-hoc basis — not uploaded every week.
-    Affiliates rows are excluded from SF QL/FT parse to avoid double-counting.
-    """
     try:
         xl = pd.ExcelFile(filepath)
         df = xl.parse(xl.sheet_names[0], header=0)
@@ -598,16 +652,13 @@ def parse_affiliate(filepath):
 
         df.columns = ["Date", "Country", "Type", "Commission", "QL", "FT"]
 
-        # Fill down Date, drop grand total row
         df["Date"] = df["Date"].ffill()
         df = df[df["Date"].astype(str) != "Grand Total"]
         df = df[df["Country"].astype(str) != "Total"]
         df = df[df["Country"].notna()]
 
-        # Parse date
         df["Date"] = pd.to_datetime(df["Date"], dayfirst=True)
 
-        # All countries except AU and NZ (domestic, not APAC marketing)
         EXCLUDE_COUNTRIES = ["AU", "NZ"]
         df = df[df["Country"].notna()].copy()
         df = df[~df["Country"].isin(EXCLUDE_COUNTRIES)]
@@ -642,7 +693,15 @@ def parse_affiliate(filepath):
 
 # ── QL / FT (Salesforce) ──────────────────────────────────────────────────────
 
+# Rows to skip in Billing Country — not real countries
+_SF_COUNTRY_SKIP = {'', 'nan', 'total', 'grand total', 'subtotal', 'count'}
+
 def _parse_sf_file(filepath, required_cols, label):
+    """
+    Parse a Salesforce Excel export (QL or FT).
+    NOTE: No country whitelist — any valid country code flows through
+    automatically. New countries (IN, ID, PH, etc.) need no config changes.
+    """
     xl  = pd.ExcelFile(filepath)
     raw = xl.parse(xl.sheet_names[0], header=None)
     xl.close()
@@ -679,6 +738,7 @@ def _parse_sf_file(filepath, required_cols, label):
     c_stage   = col_pos.get('Stage', 5)
 
     records = []
+    seen_countries = set()
     for i, row in raw.iterrows():
         if i <= header_row: continue
         vals = [str(v).strip() for v in row]
@@ -690,11 +750,13 @@ def _parse_sf_file(filepath, required_cols, label):
         medium  = vals[c_medium]  if (c_medium is not None and c_medium < len(vals)) else ''
         stage   = vals[c_stage]   if c_stage   < len(vals) else ''
 
-        if country in ('', 'nan', 'Total', 'Grand Total', 'Subtotal', 'Count'): continue
-        if country not in APAC_COUNTRIES: continue
+        # Skip non-country rows (totals, blanks) but accept ANY valid country code
+        if country.lower().strip() in _SF_COUNTRY_SKIP:
+            continue
         if utm    in ('', 'nan'): utm = ''
         if medium in ('', 'nan'): medium = ''
 
+        seen_countries.add(country)
         rec = {'Country': country, 'Date': date, 'UTM': utm, 'Medium': medium, 'Stage': stage}
         try:
             pd.to_datetime(date, dayfirst=True)
@@ -706,6 +768,8 @@ def _parse_sf_file(filepath, required_cols, label):
         print(f"      ❌ {label}: Header found at row {header_row} but no valid data rows extracted.")
         return None
 
+    # Log all countries found for visibility
+    print(f"         {label} countries found: {sorted(seen_countries)}")
     return pd.DataFrame(records)
 
 
@@ -778,16 +842,17 @@ def parse_all():
     failed_channels = []
 
     parsers = {
-        "Bing"             : ("bing",        parse_bing),
-        "Meta"             : ("meta",        parse_meta),
-        "AdRoll"           : ("adroll",      parse_adroll),
-        "BiliBili"         : ("bilibili",    parse_bilibili),
-        "RedNote"          : ("rednote",     parse_rednote),
-        "TradingView"      : ("tradingview", parse_tradingview),
-        "Apple Search Ads" : ("apple",       parse_apple),
-        "TikTok"           : ("tiktok",      parse_tiktok),
-        "Douyin"           : ("douyin",      parse_douyin),
-        "Affiliates"       : ("affiliates", parse_affiliate),
+        "Bing"             : ("bing",         parse_bing),
+        "Meta"             : ("meta",         parse_meta),
+        "Meta - Agency"    : ("meta_agency",  parse_meta_agency),
+        "AdRoll"           : ("adroll",       parse_adroll),
+        "BiliBili"         : ("bilibili",     parse_bilibili),
+        "RedNote"          : ("rednote",      parse_rednote),
+        "TradingView"      : ("tradingview",  parse_tradingview),
+        "Apple Search Ads" : ("apple",        parse_apple),
+        "TikTok"           : ("tiktok",       parse_tiktok),
+        "Douyin"           : ("douyin",       parse_douyin),
+        "Affiliates"       : ("affiliates",   parse_affiliate),
     }
 
     for label, (key, parser_fn) in parsers.items():
