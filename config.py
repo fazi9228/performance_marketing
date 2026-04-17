@@ -43,21 +43,31 @@ FILE_PATTERNS = {
 APAC_COUNTRIES = ["VN", "TH", "SG", "MY", "CN", "HK", "TW", "IN", "ID", "PH", "MN"]
 
 ADROLL_COUNTRY_MAP = {
-    "Hong Kong" : "HK",
-    "Taiwan"    : "TW",
-    "Thailand"  : "TH",
-    "Vietnam"   : "VN",
-    "Singapore" : "SG",
+    "Hong Kong"   : "HK",
+    "Taiwan"      : "TW",
+    "Thailand"    : "TH",
+    "Vietnam"     : "VN",
+    "Singapore"   : "SG",
+    "Malaysia"    : "MY",
+    "Indonesia"   : "ID",
+    "Philippines" : "PH",
+    "India"       : "IN",
+    "Mongolia"    : "MN",
+    "China"       : "CN",
 }
 
 APPLE_COUNTRY_MAP = {
-    "Hong Kong" : "HK",
-    "Taiwan"    : "TW",
-    "Thailand"  : "TH",
-    "Vietnam"   : "VN",
-    "Singapore" : "SG",
-    "Malaysia"  : "MY",
-    "China"     : "CN",
+    "Hong Kong"   : "HK",
+    "Taiwan"      : "TW",
+    "Thailand"    : "TH",
+    "Vietnam"     : "VN",
+    "Singapore"   : "SG",
+    "Malaysia"    : "MY",
+    "China"       : "CN",
+    "Indonesia"   : "ID",
+    "Philippines" : "PH",
+    "India"       : "IN",
+    "Mongolia"    : "MN",
 }
 
 # ── Channel Label Rules ───────────────────────────────────────────────────────
@@ -84,8 +94,8 @@ TRADINGVIEW_FX_RATE   = 1.58  # USD to AUD — update monthly
 
 APPLE_CHANNEL       = "Apple Search Ads"   # spend already in AUD, no FX needed
 TIKTOK_CHANNEL      = "TikTok"             # spend already in AUD, no FX needed
-DOUYIN_CHANNEL      = "Douyin"             # Chinese TikTok — spend in AUD, country always CN
-DOUYIN_COUNTRY      = "CN"
+DOUYIN_CHANNEL      = "Douyin"             # Chinese TikTok — spend in AUD
+DOUYIN_COUNTRY      = "CN"                 # Default fallback if Country column missing
 
 # ── UTM → (Channel, Channel_Group) mapping ───────────────────────────────────
 # For QL/FT rows from Salesforce. Numeric IDs → IB. Blank/- → Organic.

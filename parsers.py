@@ -90,8 +90,6 @@ def map_utm(utm):
         return UTM_TO_CHANNEL[ul]
 
     # ── Substring-based fallback ──────────────────────────────────────────
-    # Catches any future UTM variant containing these keywords
-    # e.g. "bing-remarketing", "google-display-vn", "chatgpt-referral", etc.
     _SUBSTRING_RULES = [
         ("youtube",   ("YouTube",           "YouTube")),
         ("google",    ("Google",           "Google")),
@@ -120,6 +118,9 @@ def map_utm_medium(utm, medium):
 
 # ── BING ──────────────────────────────────────────────────────────────────────
 
+# Regex matches all APAC country codes at start of campaign name
+_BING_COUNTRY_RE = re.compile(r"^(HK|TH|TW|VN|MY|SG|CN|IN|ID|PH|MN)")
+
 def parse_bing(filepath):
     try:
         xl = pd.ExcelFile(filepath)
@@ -140,7 +141,7 @@ def parse_bing(filepath):
         df = df[df["Campaign"].astype(str) != "Total"]
 
         def bing_country(name):
-            m = re.match(r"^(HK|TH|TW|VN|MY|SG)", str(name))
+            m = _BING_COUNTRY_RE.match(str(name))
             return m.group(1) if m else None
 
         def bing_channel(name):
@@ -210,12 +211,6 @@ def parse_meta(filepath):
 # ── META AGENCY ───────────────────────────────────────────────────────────────
 
 def parse_meta_agency(filepath):
-    """
-    Parser for agency-managed Meta ads (SCB / external agency).
-    File format: Date, Country, Campaign name, Ad set name,
-                 Amount spent (AUD), Impressions, Clicks (all)
-    Note: uses 'Date' column (not 'Day'), and has no CTR column.
-    """
     try:
         xl = pd.ExcelFile(filepath)
         sheet = xl.sheet_names[0]
@@ -226,11 +221,9 @@ def parse_meta_agency(filepath):
         df = xl.parse(sheet)
         xl.close()
 
-        # Filter to APAC countries
         if "Country" in df.columns:
             df = df[df["Country"].isin(APAC_COUNTRIES)]
 
-        # Date column (agency file uses 'Date', not 'Day')
         date_col = "Date" if "Date" in df.columns else "Day"
         df["Date"] = pd.to_datetime(df[date_col], errors="coerce")
         df = df[df["Date"].notna()].copy()
@@ -244,14 +237,10 @@ def parse_meta_agency(filepath):
         df["Date_Added"]    = None
         df["Date_Modified"] = None
 
-        # Clicks
         clicks_col = "Clicks (all)" if "Clicks (all)" in df.columns else "Clicks"
         df["Clicks"] = pd.to_numeric(df.get(clicks_col), errors="coerce")
-
-        # Impressions
         df["Impressions"] = pd.to_numeric(df.get("Impressions"), errors="coerce")
 
-        # Campaign: combine campaign + ad set
         if "Ad set name" in df.columns and "Campaign name" in df.columns:
             df["Campaign"] = df["Campaign name"].astype(str) + " | " + df["Ad set name"].astype(str)
         elif "Campaign name" in df.columns:
@@ -259,14 +248,12 @@ def parse_meta_agency(filepath):
         else:
             df["Campaign"] = META_AGENCY_CHANNEL
 
-        # Spend — clean dashes/blanks
         spend_col = "Amount spent (AUD)" if "Amount spent (AUD)" in df.columns else None
         if spend_col:
             df["Spend (AUD)"] = pd.to_numeric(df[spend_col], errors="coerce")
         else:
             df["Spend (AUD)"] = None
 
-        # CTR — compute from clicks/impressions (agency file has no CTR column)
         if "CTR (all)" in df.columns:
             df["CTR"] = pd.to_numeric(df["CTR (all)"], errors="coerce") / 100
         elif "CTR" in df.columns:
@@ -342,7 +329,13 @@ def parse_bilibili(filepath):
                 sheet = s; break
         df = xl.parse(sheet)
         xl.close()
-        df["Country"]       = BILIBILI_COUNTRY
+
+        # Country: read from file if column exists, else default to CN
+        if "Country" in df.columns:
+            df["Country"] = df["Country"].astype(str).str.strip().str.upper()
+        else:
+            df["Country"] = BILIBILI_COUNTRY
+
         df["Channel"]       = BILIBILI_CHANNEL
         df["Channel_Group"] = "BiliBili"
         df["Date"]          = pd.to_datetime(df["Date"]).dt.date
@@ -376,13 +369,13 @@ def parse_rednote(filepath):
         xl = pd.ExcelFile(filepath)
         sheet = xl.sheet_names[0]
         for s in xl.sheet_names:
-            sl = s.lower()
-            if "daily" not in sl and "reference" not in sl and "참고" not in sl:
+            if s.lower() == "daily":
                 sheet = s; break
         df = xl.parse(sheet)
         xl.close()
         df["Channel"]       = REDNOTE_CHANNEL
         df["Channel_Group"] = "RedNote"
+        df["Country"]       = df["Country"].astype(str).str.strip().str.upper() if "Country" in df.columns else None
         df["Campaign"]      = df["Main Account"].astype(str) + " - " + df["Placement"].astype(str)
         df["Date"]          = pd.to_datetime(df["Date"], errors="coerce")
         df = df[df["Date"].notna()].copy()
@@ -616,7 +609,12 @@ def parse_douyin(filepath):
         if df.empty:
             raise ValueError("No valid rows found.")
 
-        df["Country"]       = df["Country"].astype(str).str.strip().str.upper()
+        # Country: read from file if column exists, else default to CN
+        if "Country" in df.columns:
+            df["Country"] = df["Country"].astype(str).str.strip().str.upper()
+        else:
+            df["Country"] = DOUYIN_COUNTRY
+
         df["Channel"]       = DOUYIN_CHANNEL
         df["Channel_Group"] = get_channel_group(DOUYIN_CHANNEL)
         df["Date"]          = pd.to_datetime(df["Date"]).dt.date
@@ -697,15 +695,9 @@ def parse_affiliate(filepath):
 
 # ── QL / FT (Salesforce) ──────────────────────────────────────────────────────
 
-# Rows to skip in Billing Country — not real countries
 _SF_COUNTRY_SKIP = {'', 'nan', 'total', 'grand total', 'subtotal', 'count'}
 
 def _parse_sf_file(filepath, required_cols, label):
-    """
-    Parse a Salesforce Excel export (QL or FT).
-    NOTE: No country whitelist — any valid country code flows through
-    automatically. New countries (IN, ID, PH, etc.) need no config changes.
-    """
     xl  = pd.ExcelFile(filepath)
     raw = xl.parse(xl.sheet_names[0], header=None)
     xl.close()
@@ -754,7 +746,6 @@ def _parse_sf_file(filepath, required_cols, label):
         medium  = vals[c_medium]  if (c_medium is not None and c_medium < len(vals)) else ''
         stage   = vals[c_stage]   if c_stage   < len(vals) else ''
 
-        # Skip non-country rows (totals, blanks) but accept ANY valid country code
         if country.lower().strip() in _SF_COUNTRY_SKIP:
             continue
         if utm    in ('', 'nan'): utm = ''
@@ -772,13 +763,11 @@ def _parse_sf_file(filepath, required_cols, label):
         print(f"      ❌ {label}: Header found at row {header_row} but no valid data rows extracted.")
         return None
 
-    # Log all countries found for visibility
     print(f"         {label} countries found: {sorted(seen_countries)}")
     return pd.DataFrame(records)
 
 
 def parse_ql_ft(ql_path, ft_path):
-    """Returns (df, error_message_or_None)"""
     try:
         REQUIRED = ['Billing Country', 'Created Date', 'Google UTM Source', 'Stage']
 
@@ -791,7 +780,6 @@ def parse_ql_ft(ql_path, ft_path):
         ql_raw['Channel']       = ql_raw['Mapped'].apply(lambda x: x[0])
         ql_raw['Channel_Group'] = ql_raw['Mapped'].apply(lambda x: x[1])
 
-        # ── Drop Affiliates rows — these come from the dedicated Affiliates file ──
         ql_raw = ql_raw[ql_raw['Channel_Group'] != 'Affiliates']
 
         ql_agg = ql_raw.groupby(['Date','Country','Channel','Channel_Group']).size().reset_index(name='QL')
@@ -809,7 +797,6 @@ def parse_ql_ft(ql_path, ft_path):
         ft_raw['Channel']       = ft_raw['Mapped'].apply(lambda x: x[0])
         ft_raw['Channel_Group'] = ft_raw['Mapped'].apply(lambda x: x[1])
 
-        # ── Drop Affiliates rows — these come from the dedicated Affiliates file ──
         ft_raw = ft_raw[ft_raw['Channel_Group'] != 'Affiliates']
 
         ft_agg = ft_raw.groupby(['Date','Country','Channel','Channel_Group']).size().reset_index(name='FT')
@@ -837,10 +824,6 @@ def parse_ql_ft(ql_path, ft_path):
 # ── MASTER PARSE FUNCTION ─────────────────────────────────────────────────────
 
 def parse_all():
-    """
-    Returns (combined_df, failed_channels)
-    failed_channels: list of (channel_label, reason) tuples for the run summary.
-    """
     frames          = []
     processed_files = []
     failed_channels = []
@@ -881,7 +864,6 @@ def parse_all():
     else:
         ad_performance = empty_df()
 
-    # QL + FT rows (Salesforce — Affiliates rows excluded inside parse_ql_ft)
     ql_path = find_file("ql")
     ft_path = find_file("ft")
     if ql_path and ft_path:
@@ -901,7 +883,6 @@ def parse_all():
         if not ft_path: missing.append("FT_ file missing")
         failed_channels.append(("QL/FT (Salesforce)", "; ".join(missing)))
 
-    # Archive all successfully processed input files
     if processed_files:
         print("\n      Archiving processed input files...")
         for fp in processed_files:
