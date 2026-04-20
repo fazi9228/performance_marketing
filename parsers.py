@@ -15,6 +15,7 @@ from config import (
     TIKTOK_CHANNEL,
     DOUYIN_CHANNEL, DOUYIN_COUNTRY,
     KUAISHOU_CHANNEL, KUAISHOU_COUNTRY,
+    TA_MEDIA_CHANNEL,
     APAC_COUNTRIES, AD_PERFORMANCE_COLS, UTM_TO_CHANNEL, AD_CHANNEL_GROUP
 )
 
@@ -111,6 +112,7 @@ def map_utm(utm):
         ("apple",       ("Apple Search Ads", "Apple Search Ads")),
         ("tiktok",      ("TikTok",           "TikTok")),
         ("kuaishou",    ("Kuaishou",         "Kuaishou")),
+        ("ta-media",    ("TA Media",         "TA Media")),
         ("chatgpt",     ("ChatGPT",          "ChatGPT")),
         ("coccoc",      ("CocCoc",           "CocCoc")),
         ("adroll",      ("AdRoll",           "AdRoll")),
@@ -752,6 +754,64 @@ def parse_kuaishou(filepath):
         return empty_df(), str(e)
 
 
+# ── TA MEDIA ──────────────────────────────────────────────────────────────────
+
+def parse_ta_media(filepath):
+    """
+    Parse TA Media daily performance data.
+    Columns: Date, Country, Ad group, Creative, Cost (AUD), Impression, Clicks.
+    Date format may be YYYY.M.DD (e.g. 2026.4.13).
+    Country column is required.
+    """
+    try:
+        xl = pd.ExcelFile(filepath)
+        sheet = "Daily" if "Daily" in xl.sheet_names else xl.sheet_names[0]
+        df = xl.parse(sheet)
+        xl.close()
+
+        # Country is required
+        if "Country" not in df.columns:
+            raise ValueError("Country column not found — please add Country to the file.")
+
+        df["Country"] = df["Country"].astype(str).str.strip().str.upper()
+        df = df[df["Country"].isin(APAC_COUNTRIES)]
+
+        if df.empty:
+            raise ValueError("No valid APAC country rows found.")
+
+        df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+        df = df[df["Date"].notna()].copy()
+        df["Date"] = df["Date"].dt.date
+
+        df["Channel"]       = TA_MEDIA_CHANNEL
+        df["Channel_Group"] = get_channel_group(TA_MEDIA_CHANNEL)
+        df["QL"]            = None
+        df["FT"]            = None
+        df["Date_Added"]    = None
+
+        # Clean trailing tabs from Creative values
+        df["Creative"] = df["Creative"].astype(str).str.strip() if "Creative" in df.columns else None
+
+        # Build campaign: Ad group | Creative
+        if "Ad group" in df.columns:
+            df["Campaign"] = df["Ad group"].astype(str).str.strip() + " | " + df["Creative"].astype(str)
+        else:
+            df["Campaign"] = TA_MEDIA_CHANNEL
+
+        df["Impressions"]  = pd.to_numeric(df.get("Impression"), errors="coerce")
+        df["Clicks"]       = pd.to_numeric(df.get("Clicks"),     errors="coerce")
+        df["Spend (AUD)"]  = pd.to_numeric(df.get("Cost (AUD)"), errors="coerce")
+
+        imp = df["Impressions"]
+        df["CTR"] = (df["Clicks"] / imp).where(imp > 0, other=None)
+
+        return std_cols(df), None
+
+    except Exception as e:
+        print(f"      ❌ TA Media parse error: {e}")
+        return empty_df(), str(e)
+
+
 # ── AFFILIATES ────────────────────────────────────────────────────────────────
 
 def parse_affiliate(filepath):
@@ -950,6 +1010,7 @@ def parse_all():
         "TikTok"           : ("tiktok",       parse_tiktok),
         "Douyin"           : ("douyin",       parse_douyin),
         "Kuaishou"         : ("kuaishou",     parse_kuaishou),
+        "TA Media"         : ("ta_media",     parse_ta_media),
         "Affiliates"       : ("affiliates",   parse_affiliate),
     }
 
