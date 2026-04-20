@@ -23,6 +23,19 @@ from config import (
 def find_file(pattern_key):
     pattern = FILE_PATTERNS[pattern_key]
     matches = glob.glob(os.path.join(INPUT_DIR, f"*{pattern}*"))
+
+    # Exclude files that match a more-specific pattern.
+    # e.g. when searching for "Meta_", exclude files matching "Meta_Agency_"
+    more_specific = [
+        v for k, v in FILE_PATTERNS.items()
+        if k != pattern_key and v.startswith(pattern) and len(v) > len(pattern)
+    ]
+    if more_specific:
+        matches = [
+            m for m in matches
+            if not any(sp in os.path.basename(m) for sp in more_specific)
+        ]
+
     if not matches:
         print(f"      ⚠️  No file found for '{pattern_key}' (pattern: *{pattern}*) — skipping.")
         return None
@@ -454,8 +467,28 @@ def parse_tradingview(filepath):
 # ── APPLE SEARCH ADS ──────────────────────────────────────────────────────────
 
 def parse_apple(filepath):
+    """
+    Parse Apple Search Ads export.
+    Supports both .xlsx and .csv formats — both have 6 metadata rows
+    before the header row (row 7 in 1-indexed / skiprows=6 in pandas).
+    Columns: Date, Campaign Name, Country or Region, CR (Tap-Through),
+             Spend, Impressions, Taps, Installs (Tap-Through)
+    CTR may be a decimal (0.142857) or a percentage string ("14.29%").
+    """
     try:
-        df = pd.read_csv(filepath, skiprows=7)
+        # ── Read file (xlsx or csv) ───────────────────────────────────────
+        ext = os.path.splitext(filepath)[1].lower()
+        if ext in (".xlsx", ".xls"):
+            xl = pd.ExcelFile(filepath)
+            df = xl.parse(xl.sheet_names[0], skiprows=6)
+            xl.close()
+        else:
+            try:
+                df = pd.read_csv(filepath, skiprows=6, encoding="utf-8")
+            except UnicodeDecodeError:
+                df = pd.read_csv(filepath, skiprows=6, encoding="cp1252")
+
+        df.columns = [c.strip() for c in df.columns]
 
         df["Country"] = df["Country or Region"].map(APPLE_COUNTRY_MAP)
         df = df[df["Country"].notna() & df["Country"].isin(APAC_COUNTRIES)].copy()
@@ -463,7 +496,9 @@ def parse_apple(filepath):
         if df.empty:
             raise ValueError("No rows matched APAC countries after mapping.")
 
-        df["Date"]          = pd.to_datetime(df["Day"]).dt.date
+        # Date column — may be called "Date" or "Day"
+        date_col = "Date" if "Date" in df.columns else "Day"
+        df["Date"]          = pd.to_datetime(df[date_col]).dt.date
         df["Channel"]       = APPLE_CHANNEL
         df["Channel_Group"] = get_channel_group(APPLE_CHANNEL)
         df["Campaign"]      = df["Campaign Name"].astype(str)
@@ -475,13 +510,18 @@ def parse_apple(filepath):
         df["Impressions"]   = pd.to_numeric(df["Impressions"], errors="coerce")
         df["Clicks"]        = pd.to_numeric(df["Taps"],        errors="coerce")
         df["Spend (AUD)"]   = pd.to_numeric(df["Spend"],       errors="coerce")
-        df["CTR"] = (
-            df["CR (Tap-Through)"]
-            .astype(str)
-            .str.replace("%", "", regex=False)
-            .pipe(pd.to_numeric, errors="coerce")
-            .div(100)
-        )
+
+        # CTR: handle both decimal (0.14) and percentage string ("14.29%")
+        ctr_raw = df["CR (Tap-Through)"].astype(str).str.strip()
+        has_pct = ctr_raw.str.contains("%", na=False).any()
+        if has_pct:
+            df["CTR"] = (
+                ctr_raw.str.replace("%", "", regex=False)
+                .pipe(pd.to_numeric, errors="coerce")
+                .div(100)
+            )
+        else:
+            df["CTR"] = pd.to_numeric(df["CR (Tap-Through)"], errors="coerce")
 
         return std_cols(df), None
 
@@ -816,6 +856,8 @@ def _parse_sf_file(filepath, required_cols, label):
 
         if country.lower().strip() in _SF_COUNTRY_SKIP:
             continue
+        if country not in APAC_COUNTRIES:
+            continue
         if utm    in ('', 'nan'): utm = ''
         if medium in ('', 'nan'): medium = ''
 
@@ -837,7 +879,7 @@ def _parse_sf_file(filepath, required_cols, label):
 
 def parse_ql_ft(ql_path, ft_path):
     try:
-        REQUIRED = ['Billing Country', 'Created Date', 'Google UTM Source', 'Stage']
+        REQUIRED = ['Billing Country', 'Created Date', 'Google UTM Source', 'Google UTM Medium', 'Stage']
 
         ql_raw = _parse_sf_file(ql_path, REQUIRED, label="QL")
         if ql_raw is None:
