@@ -14,6 +14,7 @@ from config import (
     APPLE_CHANNEL, APPLE_COUNTRY_MAP,
     TIKTOK_CHANNEL,
     DOUYIN_CHANNEL, DOUYIN_COUNTRY,
+    KUAISHOU_CHANNEL, KUAISHOU_COUNTRY,
     APAC_COUNTRIES, AD_PERFORMANCE_COLS, UTM_TO_CHANNEL, AD_CHANNEL_GROUP
 )
 
@@ -91,15 +92,16 @@ def map_utm(utm):
 
     # ── Substring-based fallback ──────────────────────────────────────────
     _SUBSTRING_RULES = [
-        ("youtube",   ("YouTube",           "YouTube")),
-        ("google",    ("Google",           "Google")),
-        ("bing",      ("Bing",             "Bing")),
-        ("apple",     ("Apple Search Ads", "Apple Search Ads")),
-        ("tiktok",    ("TikTok",           "TikTok")),
-        ("chatgpt",   ("ChatGPT",          "ChatGPT")),
-        ("coccoc",    ("CocCoc",           "CocCoc")),
-        ("adroll",    ("AdRoll",           "AdRoll")),
-        ("tradingview", ("TradingView",    "TradingView")),
+        ("youtube",     ("YouTube",           "YouTube")),
+        ("google",      ("Google",           "Google")),
+        ("bing",        ("Bing",             "Bing")),
+        ("apple",       ("Apple Search Ads", "Apple Search Ads")),
+        ("tiktok",      ("TikTok",           "TikTok")),
+        ("kuaishou",    ("Kuaishou",         "Kuaishou")),
+        ("chatgpt",     ("ChatGPT",          "ChatGPT")),
+        ("coccoc",      ("CocCoc",           "CocCoc")),
+        ("adroll",      ("AdRoll",           "AdRoll")),
+        ("tradingview", ("TradingView",      "TradingView")),
     ]
     for keyword, mapping in _SUBSTRING_RULES:
         if keyword in ul:
@@ -644,6 +646,72 @@ def parse_douyin(filepath):
         return empty_df(), str(e)
 
 
+# ── KUAISHOU ──────────────────────────────────────────────────────────────────
+
+def parse_kuaishou(filepath):
+    """
+    Parse Kuaishou (快手) daily performance data.
+    Structure mirrors RedNote: Daily sheet with Date, Country, Main Account,
+    Placement, Targeting Approach, Creative, Impression, Click, Cost (AUD), CTR.
+    """
+    try:
+        xl = pd.ExcelFile(filepath)
+        sheet = "Daily" if "Daily" in xl.sheet_names else xl.sheet_names[0]
+        df = xl.parse(sheet)
+        xl.close()
+
+        df["Channel"]       = KUAISHOU_CHANNEL
+        df["Channel_Group"] = get_channel_group(KUAISHOU_CHANNEL)
+
+        # Country: read from file if column exists, else default to CN
+        if "Country" in df.columns:
+            df["Country"] = df["Country"].astype(str).str.strip().str.upper()
+        else:
+            df["Country"] = KUAISHOU_COUNTRY
+
+        df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+        df = df[df["Date"].notna()].copy()
+        df["Date"] = df["Date"].dt.date
+
+        df["QL"]         = None
+        df["FT"]         = None
+        df["Date_Added"] = None
+
+        df["Click"]      = pd.to_numeric(df["Click"],      errors="coerce").fillna(0)
+        df["Impression"] = pd.to_numeric(df["Impression"], errors="coerce").fillna(0)
+        df["Cost (AUD)"] = pd.to_numeric(df["Cost (AUD)"], errors="coerce").fillna(0)
+        df["CTR"] = df.apply(
+            lambda r: r["Click"] / r["Impression"] if r["Impression"] > 0 else 0, axis=1)
+
+        df = df.rename(columns={
+            "Impression": "Impressions",
+            "Click":      "Clicks",
+            "Cost (AUD)": "Spend (AUD)",
+        })
+
+        df["Creative"] = df["Creative"].astype(str) if "Creative" in df.columns else None
+
+        # Build campaign string: Account - Placement | Targeting | Creative
+        base = (
+            df["Main Account"].astype(str) + " - " +
+            df["Placement"].astype(str)    + " | " +
+            df["Targeting Approach"].astype(str) + " | " +
+            df["Creative"].astype(str)
+        )
+
+        # Deduplicate same-day identical campaign strings with sequence numbers
+        df["_grp_key"] = df["Date"].astype(str) + base
+        df["_seq"]     = df.groupby("_grp_key").cumcount() + 1
+        df["Campaign"] = base + df["_seq"].apply(lambda x: f" #{x}" if x > 1 else "")
+        df = df.drop(columns=["_grp_key", "_seq"])
+
+        return std_cols(df), None
+
+    except Exception as e:
+        print(f"      ❌ Kuaishou parse error: {e}")
+        return empty_df(), str(e)
+
+
 # ── AFFILIATES ────────────────────────────────────────────────────────────────
 
 def parse_affiliate(filepath):
@@ -839,6 +907,7 @@ def parse_all():
         "Apple Search Ads" : ("apple",        parse_apple),
         "TikTok"           : ("tiktok",       parse_tiktok),
         "Douyin"           : ("douyin",       parse_douyin),
+        "Kuaishou"         : ("kuaishou",     parse_kuaishou),
         "Affiliates"       : ("affiliates",   parse_affiliate),
     }
 

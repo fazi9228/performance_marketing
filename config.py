@@ -37,6 +37,7 @@ FILE_PATTERNS = {
     "tiktok"       : "Tiktok_",
     "douyin"       : "Douyin_",
     "affiliates"   : "Affiliates_",
+    "kuaishou"     : "Kuaishou_",
 }
 
 # ── Country Mappings ──────────────────────────────────────────────────────────
@@ -96,6 +97,8 @@ APPLE_CHANNEL       = "Apple Search Ads"   # spend already in AUD, no FX needed
 TIKTOK_CHANNEL      = "TikTok"             # spend already in AUD, no FX needed
 DOUYIN_CHANNEL      = "Douyin"             # Chinese TikTok — spend in AUD
 DOUYIN_COUNTRY      = "CN"                 # Default fallback if Country column missing
+KUAISHOU_CHANNEL    = "Kuaishou"           # Chinese short-video platform — spend in AUD
+KUAISHOU_COUNTRY    = "CN"                 # Default fallback if Country column missing
 
 # ── UTM → (Channel, Channel_Group) mapping ───────────────────────────────────
 # For QL/FT rows from Salesforce. Numeric IDs → IB. Blank/- → Organic.
@@ -138,6 +141,8 @@ UTM_TO_CHANNEL = {
     "bili-video"                    : ("BiliBili",         "BiliBili"),
     # ── TikTok ────────────────────────────────────────────────────────────
     "tiktok"                        : ("TikTok",           "TikTok"),
+    # ── Kuaishou ──────────────────────────────────────────────────────────
+    "kuaishou"                      : ("Kuaishou",         "Kuaishou"),
     # ── ChatGPT ───────────────────────────────────────────────────────────
     "chatgpt.com"                   : ("ChatGPT",          "ChatGPT"),
     # ── Others ────────────────────────────────────────────────────────────
@@ -180,6 +185,7 @@ AD_CHANNEL_GROUP = {
     "Apple Search Ads"     : "Apple Search Ads",
     "TikTok"               : "TikTok",
     "Douyin"               : "Douyin",
+    "Kuaishou"             : "Kuaishou",
     "Affiliates"           : "Affiliates",
     "Google"               : "Google",
     "CocCoc"               : "CocCoc",
