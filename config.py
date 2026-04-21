@@ -10,66 +10,32 @@ CREDENTIALS_FILE = "credentials.json"
 
 SHEET_AD_PERFORMANCE = "Ad_Performance"
 
-# ── BigQuery ──────────────────────────────────────────────────────────────────
-BQ_PROJECT_ID  = "gen-lang-client-0602500310"
-BQ_DATASET     = "pepperstone_apac"
-BQ_TABLE       = "ad_performance"
-BQ_LOCATION    = "asia-southeast1"
-
 # ── Local Paths ───────────────────────────────────────────────────────────────
 INPUT_DIR   = "./input"
-ARCHIVE_DIR = "./input/archive"
 OUTPUT_DIR  = "./output"
 OUTPUT_FILE = os.path.join(OUTPUT_DIR, "Pepperstone_APAC_Performance_Master.xlsx")
 
 # ── File Name Patterns ────────────────────────────────────────────────────────
 FILE_PATTERNS = {
-    "bing"         : "Bing_",
-    "meta"         : "Meta_",
-    "meta_agency"  : "Meta_Agency_",
-    "adroll"       : "Adroll_",
-    "bilibili"     : "Bilibili_",
-    "rednote"      : "Rednote_",
-    "tradingview"  : "TradingView_",
-    "ql"           : "QL_",
-    "ft"           : "FT_",
-    "apple"        : "Apple_",
-    "tiktok"       : "Tiktok_",
-    "douyin"       : "Douyin_",
-    "affiliates"   : "Affiliates_",
-    "kuaishou"     : "Kuaishou_",
-    "ta_media"     : "TA_Media_",
+    "bing"        : "Bing_",
+    "meta"        : "Meta_",
+    "adroll"      : "Adroll_",
+    "bilibili"    : "Bilibili_",
+    "rednote"     : "Rednote_",
+    "tradingview" : "TradingView_",
+    "ql"          : "QL_",
+    "ft"          : "FT_",
 }
 
 # ── Country Mappings ──────────────────────────────────────────────────────────
-APAC_COUNTRIES = ["VN", "TH", "SG", "MY", "CN", "HK", "TW", "IN", "ID", "PH", "MN"]
+APAC_COUNTRIES = ["VN", "TH", "SG", "MY", "CN", "HK", "TW"]
 
 ADROLL_COUNTRY_MAP = {
-    "Hong Kong"   : "HK",
-    "Taiwan"      : "TW",
-    "Thailand"    : "TH",
-    "Vietnam"     : "VN",
-    "Singapore"   : "SG",
-    "Malaysia"    : "MY",
-    "Indonesia"   : "ID",
-    "Philippines" : "PH",
-    "India"       : "IN",
-    "Mongolia"    : "MN",
-    "China"       : "CN",
-}
-
-APPLE_COUNTRY_MAP = {
-    "Hong Kong"   : "HK",
-    "Taiwan"      : "TW",
-    "Thailand"    : "TH",
-    "Vietnam"     : "VN",
-    "Singapore"   : "SG",
-    "Malaysia"    : "MY",
-    "China"       : "CN",
-    "Indonesia"   : "ID",
-    "Philippines" : "PH",
-    "India"       : "IN",
-    "Mongolia"    : "MN",
+    "Hong Kong" : "HK",
+    "Taiwan"    : "TW",
+    "Thailand"  : "TH",
+    "Vietnam"   : "VN",
+    "Singapore" : "SG",
 }
 
 # ── Channel Label Rules ───────────────────────────────────────────────────────
@@ -86,89 +52,50 @@ ADROLL_CHANNEL_RULES = {
     "default"     : "AdRoll",
 }
 
-META_CHANNEL          = "Meta"
-META_AGENCY_CHANNEL   = "Meta - Agency"
-BILIBILI_CHANNEL      = "BiliBili"
-REDNOTE_CHANNEL       = "RedNote"
-BILIBILI_COUNTRY      = "CN"
-TRADINGVIEW_CHANNEL   = "TradingView"
-TRADINGVIEW_FX_RATE   = 1.58  # USD to AUD — update monthly
-
-APPLE_CHANNEL       = "Apple Search Ads"   # spend already in AUD, no FX needed
-TIKTOK_CHANNEL      = "TikTok"             # spend already in AUD, no FX needed
-DOUYIN_CHANNEL      = "Douyin"             # Chinese TikTok — spend in AUD
-DOUYIN_COUNTRY      = "CN"                 # Default fallback if Country column missing
-KUAISHOU_CHANNEL    = "Kuaishou"           # Chinese short-video platform — spend in AUD
-KUAISHOU_COUNTRY    = "CN"                 # Default fallback if Country column missing
-TA_MEDIA_CHANNEL    = "TA Media"           # TA Media — spend in AUD
+META_CHANNEL        = "Meta"
+BILIBILI_CHANNEL    = "BiliBili"
+REDNOTE_CHANNEL     = "RedNote"
+BILIBILI_COUNTRY    = "CN"
+TRADINGVIEW_CHANNEL = "TradingView"
+TRADINGVIEW_FX_RATE = 1.58  # USD to AUD — update monthly
 
 # ── UTM → (Channel, Channel_Group) mapping ───────────────────────────────────
 # For QL/FT rows from Salesforce. Numeric IDs → IB. Blank/- → Organic.
-# Source: PM_report_master mapping sheet.
-# NOTE: Exact-match dict is checked first; substring rules in parsers.py
-# catch future UTM variants containing "bing", "google", "apple", "tiktok", etc.
 UTM_TO_CHANNEL = {
-    # ── Bing ──────────────────────────────────────────────────────────────
-    "bing"                          : ("Bing",             "Bing"),
-    "bing-search-category"          : ("Bing",             "Bing"),
-    "bing-search-brand"             : ("Bing",             "Bing"),
-    "bing-performance-max-category" : ("Bing",             "Bing"),
-    "bing-performance-max-brand"    : ("Bing",             "Bing"),
-    # ── Google ────────────────────────────────────────────────────────────
-    "google"                        : ("Google",           "Google"),
-    "google-search-brand"           : ("Google",           "Google"),
-    "google-search-category"        : ("Google",           "Google"),
-    "google-performance-max-brand"  : ("Google",           "Google"),
-    "google-performance-max-category": ("Google",          "Google"),
-    "google-video"                  : ("Google",           "Google"),
-    "google-play"                   : ("Google",           "Google"),
-    "youtube-video"                 : ("YouTube",           "YouTube"),
-    # ── TradingView ───────────────────────────────────────────────────────
-    "tradingview"                   : ("TradingView",      "TradingView"),
-    "direct-deal-tradingview"       : ("TradingView",      "TradingView"),
-    "direct-deal-tradingview-profile": ("TradingView",     "TradingView"),
-    # ── CocCoc ────────────────────────────────────────────────────────────
-    "coccoc"                        : ("CocCoc",           "CocCoc"),
-    "coccoc-display"                : ("CocCoc",           "CocCoc"),
-    "coccoc-logo"                   : ("CocCoc",           "CocCoc"),
-    "coccoc-search-brand"           : ("CocCoc",           "CocCoc"),
-    "coccoc-search-category"        : ("CocCoc",           "CocCoc"),
-    # ── Meta ──────────────────────────────────────────────────────────────
-    "instagram-organic-display"     : ("Meta",             "Meta"),
-    # ── AdRoll ────────────────────────────────────────────────────────────
-    "adroll-display"                : ("AdRoll",           "AdRoll"),
-    # ── Apple ─────────────────────────────────────────────────────────────
-    "apple search ads"              : ("Apple Search Ads", "Apple Search Ads"),
-    # ── BiliBili ──────────────────────────────────────────────────────────
-    "bili-video"                    : ("BiliBili",         "BiliBili"),
-    # ── TikTok ────────────────────────────────────────────────────────────
-    "tiktok"                        : ("TikTok",           "TikTok"),
-    # ── Kuaishou ──────────────────────────────────────────────────────────
-    "kuaishou"                      : ("Kuaishou",         "Kuaishou"),
-    # ── TA Media ──────────────────────────────────────────────────────────
-    "ta-media"                      : ("TA Media",         "TA Media"),
-    # ── ChatGPT ───────────────────────────────────────────────────────────
-    "chatgpt.com"                   : ("ChatGPT",          "ChatGPT"),
-    # ── Others ────────────────────────────────────────────────────────────
-    "direct-deal-followme"          : ("Follow Me",        "Others"),
-    "follow me"                     : ("Follow Me",        "Others"),
-    "direct-deal-mt5"               : ("metaquotes",       "Others"),
-    "direct-deal-myfxbook"          : ("myfxbook",         "Others"),
-    "direct-deal-fxstreet"          : ("fxstreet",         "Others"),
-    "direct-deal-forexfactory"      : ("forexfactory",     "Others"),
-    "direct-deal-foodpanda"         : ("FoodPanda",        "Others"),
-    "direct-deal-investopedia"      : ("Investopedia",     "Others"),
-    "ctrader-eu"                    : ("ctrader",          "Others"),
-    "mt5"                           : ("mt5 terminal app", "Others"),
-    "mt4"                           : ("mt4",              "Others"),
-    "perplexity"                    : ("perplexity",       "Others"),
-    "fx110"                         : ("FX110",            "Others"),
-    "zalo"                          : ("zalo",             "Others"),
-    "line"                          : ("Line",             "Others"),
-    "email"                         : ("email",            "Others"),
-    "sendgrid"                      : ("email",            "Others"),
-    "sfmc"                          : ("email",            "Others"),
-    "transactional"                 : ("email",            "Others"),
+    "direct-deal-followme"         : ("follow me",        "Others"),
+    "direct-deal-mt5"              : ("metaquotes",       "Others"),
+    "direct-deal-myfxbook"         : ("myfxbook",         "Others"),
+    "direct-deal-fxstreet"         : ("fxstreet",         "Others"),
+    "direct-deal-tradingview"      : ("TradingView",     "TradingView"),
+    "direct-deal-forexfactory"     : ("forexfactory",     "Others"),
+    "bing-search-category"         : ("Bing",             "Bing"),
+    "bing-search-brand"            : ("Bing",             "Bing"),
+    "bing-performance-max-category": ("Bing",             "Bing"),
+    "bing"                         : ("Bing",             "Bing"),
+    "google"                       : ("Google",           "Others"),
+    "google-search-brand"          : ("Google",           "Google"),
+    "google-search-category"       : ("Google",           "Google"),
+    "google-performance-max-brand" : ("Google",           "Google"),
+    "google-performance-max-category": ("Google",         "Google"),
+    "google-video"                 : ("Google",           "Google"),
+    "google-play"                  : ("Google",           "Others"),
+    "tradingview"                  : ("TradingView",     "TradingView"),
+    "ctrader-eu"                   : ("ctrader",          "Others"),
+    "mt5"                          : ("mt5 terminal app", "Others"),
+    "mt4"                          : ("mt4",              "Others"),
+    "chatgpt.com"                  : ("chatgpt",          "Others"),
+    "perplexity"                   : ("perplexity",       "Others"),
+    "youtube-video"                : ("youtube",          "Others"),
+    "fx110"                        : ("fx110",            "Others"),
+    "zalo"                         : ("zalo",             "Others"),
+    "line"                         : ("line",             "Others"),
+    "email"                        : ("email",            "Others"),
+    "sendgrid"                     : ("email",            "Others"),
+    "sfmc"                         : ("email",            "Others"),
+    "transactional"                : ("email",            "Others"),
+    "coccoc-display"               : ("coccoc",           "Others"),
+    "instagram-organic-display"    : ("Meta",             "Meta"),
+    "adroll-display"               : ("AdRoll",           "AdRoll"),
 }
 
 # ── Channel → Channel_Group mapping for ad channels ──────────────────────────
@@ -176,9 +103,7 @@ AD_CHANNEL_GROUP = {
     "Bing - Brand"         : "Bing",
     "Bing - Category"      : "Bing",
     "Bing - PMax"          : "Bing",
-    "Bing"                 : "Bing",
     "Meta"                 : "Meta",
-    "Meta - Agency"        : "Meta",
     "AdRoll - Retargeting" : "AdRoll",
     "AdRoll - Lookalike"   : "AdRoll",
     "AdRoll - Contextual"  : "AdRoll",
@@ -186,23 +111,13 @@ AD_CHANNEL_GROUP = {
     "BiliBili"             : "BiliBili",
     "RedNote"              : "RedNote",
     "TradingView"          : "TradingView",
-    "Apple Search Ads"     : "Apple Search Ads",
-    "TikTok"               : "TikTok",
-    "Douyin"               : "Douyin",
-    "Kuaishou"             : "Kuaishou",
-    "TA Media"             : "TA Media",
-    "Affiliates"           : "Affiliates",
-    "Google"               : "Google",
-    "CocCoc"               : "CocCoc",
-    "ChatGPT"              : "ChatGPT",
-    "YouTube"              : "YouTube",
 }
 
 # ── Master Sheet Columns ──────────────────────────────────────────────────────
 AD_PERFORMANCE_COLS = [
     "Date", "Country", "Channel", "Campaign", "Creative",
     "Impressions", "Clicks", "CTR", "Spend (AUD)",
-    "QL", "FT", "Channel_Group", "Date_Added", "Date_Modified"
+    "QL", "FT", "Channel_Group"
 ]
 
 # ── Deduplication Keys ────────────────────────────────────────────────────────
