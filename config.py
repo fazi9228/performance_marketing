@@ -11,10 +11,10 @@ CREDENTIALS_FILE = "credentials.json"
 SHEET_AD_PERFORMANCE = "Ad_Performance"
 
 # ── BigQuery ──────────────────────────────────────────────────────────────────
-BQ_PROJECT_ID = os.getenv("BQ_PROJECT_ID", "your-project-id")
-BQ_DATASET    = os.getenv("BQ_DATASET",    "your_dataset")
-BQ_TABLE      = os.getenv("BQ_TABLE",      "ad_performance")
-BQ_LOCATION   = os.getenv("BQ_LOCATION",   "asia-southeast1")
+BQ_PROJECT_ID  = "gen-lang-client-0602500310"
+BQ_DATASET     = "pepperstone_apac"
+BQ_TABLE       = "ad_performance"
+BQ_LOCATION    = "asia-southeast1"
 
 # ── Local Paths ───────────────────────────────────────────────────────────────
 INPUT_DIR   = "./input"
@@ -161,7 +161,7 @@ AD_CHANNEL_GROUP = {
 AD_PERFORMANCE_COLS = [
     "Date", "Country", "Channel", "Campaign", "Creative",
     "Impressions", "Clicks", "CTR", "Spend (AUD)",
-    "QL", "FT", "Channel_Group"
+    "QL", "FT", "Channel_Group", "Date_Added", "Date_Modified"
 ]
 
 # ── Deduplication Keys ────────────────────────────────────────────────────────

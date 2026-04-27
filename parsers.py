@@ -177,9 +177,8 @@ def parse_bing(filepath):
         df["Creative"]   = None
         df["Date_Added"] = None
         df["Date_Modified"] = None
-        out = df[["Date","Country","Channel","Campaign","Creative","Impressions","Clicks","CTR","Spend","QL","FT","Channel_Group","Date_Added","Date_Modified"]].copy()
-        out.columns = AD_PERFORMANCE_COLS
-        return out, None
+        df = df.rename(columns={"Spend": "Spend (AUD)"})
+        return std_cols(df), None
     except Exception as e:
         print(f"      ❌ Bing parse error: {e}")
         return empty_df(), str(e)
@@ -327,9 +326,7 @@ def parse_adroll(filepath):
         df["Date_Added"] = None
         df["Date_Modified"] = None
         df = df.rename(columns={spend_col: "Spend (AUD)"})
-        out = df[["Date","Country","Channel","Campaign","Creative","Impressions","Clicks","CTR","Spend (AUD)","QL","FT","Channel_Group","Date_Added","Date_Modified"]].copy()
-        out.columns = AD_PERFORMANCE_COLS
-        return out, None
+        return std_cols(df), None
     except Exception as e:
         print(f"      ❌ AdRoll parse error: {e}")
         return empty_df(), str(e)

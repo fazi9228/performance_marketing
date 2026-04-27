@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C \"c:/Users/FaziKhan/OneDrive - Pepperstone/Documents/work/reports/Performance_marketing/PM report automation/perf_marketing_pipeline\" diff -- performance_marketing/parsers.py)",
+      "Bash(git -C \"c:/Users/FaziKhan/OneDrive - Pepperstone/Documents/work/reports/Performance_marketing/PM report automation/perf_marketing_pipeline\" status performance_marketing)"
+    ]
+  }
+}
