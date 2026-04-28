@@ -862,11 +862,18 @@ def parse_affiliate(filepath):
 
 _SF_COUNTRY_SKIP = {'', 'nan', 'total', 'grand total', 'subtotal', 'count'}
 
-def _parse_sf_file(filepath, required_cols, label):
+def _parse_sf_file(filepath, required_cols, label, date_col='Created Date'):
+    """
+    date_col: which column to use as the row Date.
+        QL uses 'Created Date' (lead creation event).
+        FT uses 'First Trade Date' (when the funded trade actually happened).
+    """
     xl  = pd.ExcelFile(filepath)
     raw = xl.parse(xl.sheet_names[0], header=None)
     xl.close()
 
+    if date_col not in required_cols:
+        required_cols = list(required_cols) + [date_col]
     required_lower = {c.lower() for c in required_cols}
     header_row = None
     col_pos    = {}
@@ -893,7 +900,7 @@ def _parse_sf_file(filepath, required_cols, label):
         return None
 
     c_country = col_pos.get('Billing Country', 1)
-    c_date    = col_pos.get('Created Date',    3)
+    c_date    = col_pos.get(date_col,          3)
     c_utm     = col_pos.get('Google UTM Source', 4)
     c_medium  = col_pos.get('Google UTM Medium', None)
     c_stage   = col_pos.get('Stage', 5)
@@ -934,54 +941,70 @@ def _parse_sf_file(filepath, required_cols, label):
     return pd.DataFrame(records)
 
 
-def parse_ql_ft(ql_path, ft_path):
+_SF_REQUIRED = ['Billing Country', 'Created Date', 'Google UTM Source', 'Google UTM Medium', 'Stage']
+
+
+def _build_sf_rows(raw, count_col):
+    """
+    Map UTM, drop Affiliates rows, aggregate by Date+Country+Channel+Channel_Group.
+    The other metric column (FT when count_col='QL', and vice versa) is set to <NA>
+    so the BQ MERGE preserves whatever target already has for it.
+    """
+    raw = raw.copy()
+    # Normalize to date — FT's First Trade Date includes a timestamp, which would
+    # otherwise fragment groupby keys.
+    raw['Date'] = pd.to_datetime(raw['Date'], dayfirst=True).dt.normalize()
+    raw['Mapped']        = raw.apply(lambda r: map_utm_medium(r['UTM'], r['Medium']), axis=1)
+    raw['Channel']       = raw['Mapped'].apply(lambda x: x[0])
+    raw['Channel_Group'] = raw['Mapped'].apply(lambda x: x[1])
+    raw = raw[raw['Channel_Group'] != 'Affiliates']
+
+    agg = raw.groupby(['Date','Country','Channel','Channel_Group']).size().reset_index(name=count_col)
+    agg[count_col] = agg[count_col].astype('Int64')
+
+    other = 'FT' if count_col == 'QL' else 'QL'
+    agg[other] = pd.array([pd.NA] * len(agg), dtype='Int64')
+
+    agg['Campaign']      = agg['Channel']
+    agg['Creative']      = None
+    agg['Impressions']   = None
+    agg['Clicks']        = None
+    agg['CTR']           = None
+    agg['Spend (AUD)']   = None
+    agg['Date_Added']    = None
+    agg['Date_Modified'] = None
+    agg = agg.sort_values(['Date','Country','Channel']).reset_index(drop=True)
+    return agg[AD_PERFORMANCE_COLS]
+
+
+def parse_ql(ql_path):
+    """Returns (df, error_or_None). FT column is <NA> so the MERGE leaves target.FT alone."""
     try:
-        REQUIRED = ['Billing Country', 'Created Date', 'Google UTM Source', 'Google UTM Medium', 'Stage']
-
-        ql_raw = _parse_sf_file(ql_path, REQUIRED, label="QL")
-        if ql_raw is None:
+        raw = _parse_sf_file(ql_path, _SF_REQUIRED, label="QL")
+        if raw is None:
             return empty_df(), "QL header/data not found"
+        return _build_sf_rows(raw, 'QL'), None
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return empty_df(), str(e)
 
-        ql_raw['Date'] = pd.to_datetime(ql_raw['Date'], dayfirst=True)
-        ql_raw['Mapped']        = ql_raw.apply(lambda r: map_utm_medium(r['UTM'], r['Medium']), axis=1)
-        ql_raw['Channel']       = ql_raw['Mapped'].apply(lambda x: x[0])
-        ql_raw['Channel_Group'] = ql_raw['Mapped'].apply(lambda x: x[1])
 
-        ql_raw = ql_raw[ql_raw['Channel_Group'] != 'Affiliates']
-
-        ql_agg = ql_raw.groupby(['Date','Country','Channel','Channel_Group']).size().reset_index(name='QL')
-
-        ft_raw = _parse_sf_file(ft_path, REQUIRED, label="FT")
-        if ft_raw is None:
-            return empty_df(), "FT header/data not found"
-
-        ft_raw = ft_raw[ft_raw['Stage'].isin(['Active', 'Funded NT', 'Funded'])]
-        if ft_raw.empty:
+def parse_ft(ft_path):
+    """
+    Returns (df, error_or_None). QL column is <NA> so the MERGE leaves target.QL alone.
+    FT is bucketed by First Trade Date (when the funded trade actually happened),
+    not by Created Date — Created Date is when the lead was first created and can
+    be months earlier than the trade itself.
+    """
+    try:
+        raw = _parse_sf_file(ft_path, _SF_REQUIRED, label="FT", date_col='First Trade Date')
+        if raw is None:
+            return empty_df(), "FT header/data not found (does the file include a 'First Trade Date' column?)"
+        raw = raw[raw['Stage'].isin(['Active', 'Funded NT', 'Funded'])]
+        if raw.empty:
             return empty_df(), "FT: no rows with Stage in [Active, Funded NT, Funded]"
-
-        ft_raw['Date'] = pd.to_datetime(ft_raw['Date'], dayfirst=True)
-        ft_raw['Mapped']        = ft_raw.apply(lambda r: map_utm_medium(r['UTM'], r['Medium']), axis=1)
-        ft_raw['Channel']       = ft_raw['Mapped'].apply(lambda x: x[0])
-        ft_raw['Channel_Group'] = ft_raw['Mapped'].apply(lambda x: x[1])
-
-        ft_raw = ft_raw[ft_raw['Channel_Group'] != 'Affiliates']
-
-        ft_agg = ft_raw.groupby(['Date','Country','Channel','Channel_Group']).size().reset_index(name='FT')
-
-        merged = pd.merge(ql_agg, ft_agg, on=['Date','Country','Channel','Channel_Group'], how='outer').fillna(0)
-        merged[['QL','FT']] = merged[['QL','FT']].astype(int)
-
-        merged['Campaign']    = merged['Channel']
-        merged['Creative']    = None
-        merged['Impressions'] = None
-        merged['Clicks']      = None
-        merged['CTR']         = None
-        merged['Spend (AUD)'] = None
-        merged['Date_Added']  = None
-        merged['Date_Modified'] = None
-        merged = merged.sort_values(['Date','Country','Channel']).reset_index(drop=True)
-        return merged[AD_PERFORMANCE_COLS], None
-
+        return _build_sf_rows(raw, 'FT'), None
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -1033,24 +1056,31 @@ def parse_all():
     else:
         ad_performance = empty_df()
 
-    ql_path = find_file("ql")
-    ft_path = find_file("ft")
-    if ql_path and ft_path:
-        ql_ft_rows, err = parse_ql_ft(ql_path, ft_path)
-        if err or len(ql_ft_rows) == 0:
+    # QL and FT run independently — either can be re-processed alone.
+    # The BQ MERGE uses IFNULL on QL/FT, so a file covering only one metric
+    # leaves the other untouched in the target table.
+    sf_frames = []
+    for label, key, parser_fn in [
+        ("QL (Salesforce)", "ql", parse_ql),
+        ("FT (Salesforce)", "ft", parse_ft),
+    ]:
+        path = find_file(key)
+        if not path:
+            failed_channels.append((label, f"{key.upper()}_ file missing"))
+            continue
+        rows, err = parser_fn(path)
+        if err or len(rows) == 0:
             reason = err if err else "Parser returned 0 rows"
-            failed_channels.append(("QL/FT (Salesforce)", reason))
-        else:
-            print(f"             → {len(ql_ft_rows):,} QL/FT rows parsed")
-            ql_ft_rows["Date"] = pd.to_datetime(ql_ft_rows["Date"])
-            processed_files.extend([ql_path, ft_path])
-            ad_performance = pd.concat([ad_performance, ql_ft_rows], ignore_index=True)
-            ad_performance = ad_performance.sort_values(["Date","Country","Channel"]).reset_index(drop=True)
-    else:
-        missing = []
-        if not ql_path: missing.append("QL_ file missing")
-        if not ft_path: missing.append("FT_ file missing")
-        failed_channels.append(("QL/FT (Salesforce)", "; ".join(missing)))
+            failed_channels.append((label, reason))
+            continue
+        print(f"             → {len(rows):,} {label.split()[0]} rows parsed")
+        rows["Date"] = pd.to_datetime(rows["Date"])
+        processed_files.append(path)
+        sf_frames.append(rows)
+
+    if sf_frames:
+        ad_performance = pd.concat([ad_performance] + sf_frames, ignore_index=True)
+        ad_performance = ad_performance.sort_values(["Date","Country","Channel"]).reset_index(drop=True)
 
     if processed_files:
         print("\n      Archiving processed input files...")

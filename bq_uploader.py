@@ -160,10 +160,14 @@ def upload_to_bigquery(combined):
         qlft_df = bq_df[qlft_mask].copy()
         ad_df   = bq_df[~qlft_mask].copy()
 
-        # Aggregate QL/FT rows: sum QL and FT for duplicate keys
+        # Aggregate QL/FT rows: sum QL and FT for duplicate keys.
+        # min_count=1 keeps the result NULL when every value in the group is NULL —
+        # otherwise pandas .sum() returns 0 and we lose the "no data" signal the MERGE relies on.
         if not qlft_df.empty:
             qlft_keys = ["Date", "Country", "Channel", "Channel_Group"]
-            agg_dict = {"QL": "sum", "FT": "sum", "Campaign": "first", "Creative": "first",
+            agg_dict = {"QL": lambda s: s.sum(min_count=1),
+                        "FT": lambda s: s.sum(min_count=1),
+                        "Campaign": "first", "Creative": "first",
                         "Impressions": "first", "Clicks": "first", "CTR": "first",
                         "Spend_AUD": "first", "Date_Added": "first", "Date_Modified": "first"}
             qlft_df = qlft_df.groupby(qlft_keys, as_index=False, dropna=False).agg(agg_dict)
@@ -217,8 +221,8 @@ def upload_to_bigquery(combined):
             target.Clicks         = source.Clicks,
             target.CTR            = source.CTR,
             target.Spend_AUD      = source.Spend_AUD,
-            target.QL             = source.QL,
-            target.FT             = source.FT,
+            target.QL             = IFNULL(source.QL, target.QL),
+            target.FT             = IFNULL(source.FT, target.FT),
             target.Channel_Group  = source.Channel_Group,
             target.Date_Modified  = source.Date_Modified
         WHEN NOT MATCHED THEN INSERT
