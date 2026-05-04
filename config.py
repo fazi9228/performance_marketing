@@ -36,6 +36,7 @@ FILE_PATTERNS = {
     "douyin"       : "Douyin_",
     "kuaishou"     : "Kuaishou_",
     "ta_media"     : "TA_Media_",
+    "wechat"       : "WeChat_",
     "affiliates"   : "Affiliates_",
     "ql"           : "QL_",
     "ft"           : "FT_",
@@ -95,6 +96,8 @@ DOUYIN_COUNTRY        = "CN"
 KUAISHOU_CHANNEL      = "Kuaishou"
 KUAISHOU_COUNTRY      = "CN"
 TA_MEDIA_CHANNEL      = "TA Media"
+WECHAT_CHANNEL        = "WeChat"
+WECHAT_COUNTRY        = "CN"      # Default fallback if Country column missing
 
 # ── UTM → (Channel, Channel_Group) mapping ───────────────────────────────────
 # For QL/FT rows from Salesforce. Numeric IDs → IB. Blank/- → Organic.
@@ -154,6 +157,7 @@ AD_CHANNEL_GROUP = {
     "Douyin"               : "Douyin",
     "Kuaishou"             : "Kuaishou",
     "TA Media"             : "TA Media",
+    "WeChat"               : "WeChat",
     "Affiliates"           : "Affiliates",
 }
 

@@ -16,6 +16,7 @@ from config import (
     DOUYIN_CHANNEL, DOUYIN_COUNTRY,
     KUAISHOU_CHANNEL, KUAISHOU_COUNTRY,
     TA_MEDIA_CHANNEL,
+    WECHAT_CHANNEL, WECHAT_COUNTRY,
     APAC_COUNTRIES, AD_PERFORMANCE_COLS, UTM_TO_CHANNEL, AD_CHANNEL_GROUP
 )
 
@@ -809,6 +810,65 @@ def parse_ta_media(filepath):
         return empty_df(), str(e)
 
 
+# ── WECHAT ────────────────────────────────────────────────────────────────────
+
+def parse_wechat(filepath):
+    """
+    WeChat ads — single sheet, header on row 1.
+    Columns: Date, Week, Country, Placement, Targeting Approach, Creative,
+             Cost (AUD), Impressions, Clicks
+    Campaign is a composite of Placement | Targeting Approach | Creative
+    (no native Campaign Name column in the export).
+    """
+    try:
+        xl = pd.ExcelFile(filepath)
+        df = xl.parse(xl.sheet_names[0], header=0)
+        xl.close()
+        df.columns = [str(c).strip() for c in df.columns]
+        if "Impression" in df.columns and "Impressions" not in df.columns:
+            df = df.rename(columns={"Impression": "Impressions"})
+
+        df = df[df["Date"].notna()]
+        if df.empty:
+            raise ValueError("No valid rows found.")
+
+        df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+        df = df[df["Date"].notna()].copy()
+        df["Date"] = df["Date"].dt.date
+
+        if "Country" in df.columns:
+            df["Country"] = df["Country"].astype(str).str.strip().str.upper()
+        else:
+            df["Country"] = WECHAT_COUNTRY
+
+        df["Channel"]       = WECHAT_CHANNEL
+        df["Channel_Group"] = get_channel_group(WECHAT_CHANNEL)
+        df["QL"]            = None
+        df["FT"]            = None
+        df["Date_Added"]    = None
+        df["Date_Modified"] = None
+
+        df["Impressions"] = pd.to_numeric(df.get("Impressions"), errors="coerce")
+        df["Clicks"]      = pd.to_numeric(df.get("Clicks"),      errors="coerce")
+        df["Spend (AUD)"] = pd.to_numeric(df.get("Cost (AUD)"),  errors="coerce")
+
+        imp = df["Impressions"]
+        df["CTR"] = (df["Clicks"] / imp).where(imp > 0, other=None)
+
+        creative_col = df["Creative"].astype(str) if "Creative" in df.columns else ""
+        df["Creative"] = creative_col
+
+        placement = df["Placement"].astype(str)         if "Placement" in df.columns         else pd.Series([""] * len(df), index=df.index)
+        targeting = df["Targeting Approach"].astype(str) if "Targeting Approach" in df.columns else pd.Series([""] * len(df), index=df.index)
+        df["Campaign"] = placement.str.cat(targeting, sep=" | ").str.cat(df["Creative"].astype(str), sep=" | ")
+
+        return std_cols(df), None
+
+    except Exception as e:
+        print(f"      ❌ WeChat parse error: {e}")
+        return empty_df(), str(e)
+
+
 # ── AFFILIATES ────────────────────────────────────────────────────────────────
 
 def parse_affiliate(filepath):
@@ -1031,6 +1091,7 @@ def parse_all():
         "Douyin"           : ("douyin",       parse_douyin),
         "Kuaishou"         : ("kuaishou",     parse_kuaishou),
         "TA Media"         : ("ta_media",     parse_ta_media),
+        "WeChat"           : ("wechat",       parse_wechat),
         "Affiliates"       : ("affiliates",   parse_affiliate),
     }
 
