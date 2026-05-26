@@ -29,20 +29,29 @@ STAGING_TABLE = f"{BQ_PROJECT_ID}.{BQ_DATASET}._staging_{BQ_TABLE}"
 # ── Schema ────────────────────────────────────────────────────────────────────
 
 BQ_SCHEMA = [
-    bigquery.SchemaField("Date",          "DATE"),
-    bigquery.SchemaField("Country",       "STRING"),
-    bigquery.SchemaField("Channel",       "STRING"),
-    bigquery.SchemaField("Campaign",      "STRING"),
-    bigquery.SchemaField("Creative",      "STRING"),
-    bigquery.SchemaField("Impressions",   "FLOAT64"),
-    bigquery.SchemaField("Clicks",        "FLOAT64"),
-    bigquery.SchemaField("CTR",           "FLOAT64"),
-    bigquery.SchemaField("Spend_AUD",     "FLOAT64"),
-    bigquery.SchemaField("QL",            "INT64"),
-    bigquery.SchemaField("FT",            "INT64"),
-    bigquery.SchemaField("Channel_Group", "STRING"),
-    bigquery.SchemaField("Date_Added",    "DATE"),
-    bigquery.SchemaField("Date_Modified", "DATE"),
+    bigquery.SchemaField("Date",            "DATE"),
+    bigquery.SchemaField("Country",         "STRING"),
+    bigquery.SchemaField("Channel",         "STRING"),
+    bigquery.SchemaField("Campaign",        "STRING"),
+    bigquery.SchemaField("Creative",        "STRING"),
+    bigquery.SchemaField("Impressions",     "FLOAT64"),
+    bigquery.SchemaField("Clicks",          "FLOAT64"),
+    bigquery.SchemaField("CTR",             "FLOAT64"),
+    bigquery.SchemaField("Spend_AUD",       "FLOAT64"),
+    bigquery.SchemaField("QL",              "INT64"),
+    bigquery.SchemaField("FT",              "INT64"),
+    bigquery.SchemaField("Channel_Group",   "STRING"),
+    bigquery.SchemaField("Video_Views",     "FLOAT64"),
+    bigquery.SchemaField("Video_Plays_25",  "FLOAT64"),
+    bigquery.SchemaField("Video_Plays_50",  "FLOAT64"),
+    bigquery.SchemaField("Video_Plays_75",  "FLOAT64"),
+    bigquery.SchemaField("Video_Plays_100", "FLOAT64"),
+    bigquery.SchemaField("Date_Added",      "DATE"),
+    bigquery.SchemaField("Date_Modified",   "DATE"),
+]
+
+VIDEO_NUMERIC_COLS = [
+    "Video_Views", "Video_Plays_25", "Video_Plays_50", "Video_Plays_75", "Video_Plays_100"
 ]
 
 
@@ -60,10 +69,9 @@ def _get_client():
 
 
 def _ensure_table(client):
-    """Create the table if it doesn't exist."""
+    """Create the table if it doesn't exist; otherwise add any newly-defined columns."""
     try:
-        client.get_table(TABLE_REF)
-        return True  # already exists
+        table = client.get_table(TABLE_REF)
     except Exception:
         table = bigquery.Table(TABLE_REF, schema=BQ_SCHEMA)
         table.time_partitioning = bigquery.TimePartitioning(
@@ -74,6 +82,18 @@ def _ensure_table(client):
         print(f"         📊 Created BigQuery table: {TABLE_REF}")
         print(f"            Partitioned by Date (monthly)")
         return False  # newly created
+
+    # Existing table: evolve schema by adding any new columns from BQ_SCHEMA.
+    existing = {f.name for f in table.schema}
+    new_fields = [f for f in BQ_SCHEMA if f.name not in existing]
+    if new_fields:
+        # ALTER TABLE ADD COLUMN is the safe way to add columns to a populated table;
+        # the table.schema setter rejects adds that change ordering relative to existing fields.
+        add_clauses = ", ".join(f"ADD COLUMN IF NOT EXISTS `{f.name}` {f.field_type}" for f in new_fields)
+        sql = f"ALTER TABLE `{TABLE_REF}` {add_clauses}"
+        client.query(sql).result()
+        print(f"         📊 Added new columns to {TABLE_REF}: {[f.name for f in new_fields]}")
+    return True  # already exists
 
 
 def _prepare_df(df):
@@ -88,7 +108,7 @@ def _prepare_df(df):
         out = out.rename(columns={"Spend (AUD)": "Spend_AUD"})
 
     # Numeric columns
-    for col in ["Impressions", "Clicks", "CTR", "Spend_AUD"]:
+    for col in ["Impressions", "Clicks", "CTR", "Spend_AUD"] + VIDEO_NUMERIC_COLS:
         if col in out.columns:
             out[col] = pd.to_numeric(out[col], errors="coerce")
 
@@ -170,6 +190,8 @@ def upload_to_bigquery(combined):
                         "Campaign": "first", "Creative": "first",
                         "Impressions": "first", "Clicks": "first", "CTR": "first",
                         "Spend_AUD": "first", "Date_Added": "first", "Date_Modified": "first"}
+            for c in VIDEO_NUMERIC_COLS:
+                agg_dict[c] = "first"
             qlft_df = qlft_df.groupby(qlft_keys, as_index=False, dropna=False).agg(agg_dict)
 
         # Aggregate Ad rows: sum numeric values for duplicate keys
@@ -178,6 +200,8 @@ def upload_to_bigquery(combined):
             agg_dict = {"Impressions": "sum", "Clicks": "sum", "Spend_AUD": "sum",
                         "CTR": "first", "QL": "first", "FT": "first",
                         "Channel_Group": "first", "Date_Added": "first", "Date_Modified": "first"}
+            for c in VIDEO_NUMERIC_COLS:
+                agg_dict[c] = lambda s: s.sum(min_count=1)
             ad_df = ad_df.groupby(ad_keys, as_index=False, dropna=False).agg(agg_dict)
 
         bq_df = pd.concat([ad_df, qlft_df], ignore_index=True)
@@ -217,22 +241,31 @@ def upload_to_bigquery(combined):
             END
         )
         WHEN MATCHED THEN UPDATE SET
-            target.Impressions    = source.Impressions,
-            target.Clicks         = source.Clicks,
-            target.CTR            = source.CTR,
-            target.Spend_AUD      = source.Spend_AUD,
-            target.QL             = IFNULL(source.QL, target.QL),
-            target.FT             = IFNULL(source.FT, target.FT),
-            target.Channel_Group  = source.Channel_Group,
-            target.Date_Modified  = source.Date_Modified
+            target.Impressions     = source.Impressions,
+            target.Clicks          = source.Clicks,
+            target.CTR             = source.CTR,
+            target.Spend_AUD       = source.Spend_AUD,
+            target.QL              = IFNULL(source.QL, target.QL),
+            target.FT              = IFNULL(source.FT, target.FT),
+            target.Channel_Group   = source.Channel_Group,
+            target.Video_Views     = IFNULL(source.Video_Views,     target.Video_Views),
+            target.Video_Plays_25  = IFNULL(source.Video_Plays_25,  target.Video_Plays_25),
+            target.Video_Plays_50  = IFNULL(source.Video_Plays_50,  target.Video_Plays_50),
+            target.Video_Plays_75  = IFNULL(source.Video_Plays_75,  target.Video_Plays_75),
+            target.Video_Plays_100 = IFNULL(source.Video_Plays_100, target.Video_Plays_100),
+            target.Date_Modified   = source.Date_Modified
         WHEN NOT MATCHED THEN INSERT
             (Date, Country, Channel, Campaign, Creative,
              Impressions, Clicks, CTR, Spend_AUD,
-             QL, FT, Channel_Group, Date_Added, Date_Modified)
+             QL, FT, Channel_Group,
+             Video_Views, Video_Plays_25, Video_Plays_50, Video_Plays_75, Video_Plays_100,
+             Date_Added, Date_Modified)
         VALUES
             (source.Date, source.Country, source.Channel, source.Campaign, source.Creative,
              source.Impressions, source.Clicks, source.CTR, source.Spend_AUD,
-             source.QL, source.FT, source.Channel_Group, source.Date_Added, source.Date_Modified)
+             source.QL, source.FT, source.Channel_Group,
+             source.Video_Views, source.Video_Plays_25, source.Video_Plays_50, source.Video_Plays_75, source.Video_Plays_100,
+             source.Date_Added, source.Date_Modified)
         """
 
         merge_job = client.query(merge_sql)

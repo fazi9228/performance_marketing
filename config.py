@@ -37,6 +37,7 @@ FILE_PATTERNS = {
     "kuaishou"     : "Kuaishou_",
     "ta_media"     : "TA_Media_",
     "wechat"       : "WeChat_",
+    "dv360"        : "DV360_",
     "affiliates"   : "Affiliates_",
     "ql"           : "QL_",
     "ft"           : "FT_",
@@ -98,6 +99,7 @@ KUAISHOU_COUNTRY      = "CN"
 TA_MEDIA_CHANNEL      = "TA Media"
 WECHAT_CHANNEL        = "WeChat"
 WECHAT_COUNTRY        = "CN"      # Default fallback if Country column missing
+YOUTUBE_CHANNEL       = "YouTube"  # DV360 export, YouTube is the media
 
 # ── UTM → (Channel, Channel_Group) mapping ───────────────────────────────────
 # For QL/FT rows from Salesforce. Numeric IDs → IB. Blank/- → Organic.
@@ -158,6 +160,7 @@ AD_CHANNEL_GROUP = {
     "Kuaishou"             : "Kuaishou",
     "TA Media"             : "TA Media",
     "WeChat"               : "WeChat",
+    "YouTube"              : "YouTube",
     "Affiliates"           : "Affiliates",
 }
 
@@ -165,7 +168,9 @@ AD_CHANNEL_GROUP = {
 AD_PERFORMANCE_COLS = [
     "Date", "Country", "Channel", "Campaign", "Creative",
     "Impressions", "Clicks", "CTR", "Spend (AUD)",
-    "QL", "FT", "Channel_Group", "Date_Added", "Date_Modified"
+    "QL", "FT", "Channel_Group",
+    "Video_Views", "Video_Plays_25", "Video_Plays_50", "Video_Plays_75", "Video_Plays_100",
+    "Date_Added", "Date_Modified"
 ]
 
 # ── Deduplication Keys ────────────────────────────────────────────────────────

@@ -17,8 +17,30 @@ from config import (
     KUAISHOU_CHANNEL, KUAISHOU_COUNTRY,
     TA_MEDIA_CHANNEL,
     WECHAT_CHANNEL, WECHAT_COUNTRY,
+    YOUTUBE_CHANNEL,
     APAC_COUNTRIES, AD_PERFORMANCE_COLS, UTM_TO_CHANNEL, AD_CHANNEL_GROUP
 )
+
+VIDEO_PLAY_PCT_COLS = {
+    "Video plays at 25%":  "Video_Plays_25",
+    "Video plays at 50%":  "Video_Plays_50",
+    "Video plays at 75%":  "Video_Plays_75",
+    "Video plays at 100%": "Video_Plays_100",
+}
+
+def _extract_video_cols(df, views_source_col):
+    """
+    Coerce the 5 video metrics to numeric on `df` in place.
+    `views_source_col` is the source column that maps to Video_Views
+    (e.g. '3-second video plays' for Meta, 'Views' for TikTok / DV360).
+    Missing columns become None.
+    """
+    if views_source_col and views_source_col in df.columns:
+        df["Video_Views"] = pd.to_numeric(df[views_source_col], errors="coerce")
+    else:
+        df["Video_Views"] = None
+    for src, dst in VIDEO_PLAY_PCT_COLS.items():
+        df[dst] = pd.to_numeric(df[src], errors="coerce") if src in df.columns else None
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -219,6 +241,10 @@ def parse_meta(filepath):
         else:
             imp = pd.to_numeric(df.get("Impressions"), errors="coerce")
             df["CTR"] = (df["Clicks"] / imp).where(imp > 0, other=None)
+
+        # Video metrics — Meta's first-stage view is the 3-second play.
+        _extract_video_cols(df, views_source_col="3-second video plays")
+
         return std_cols(df), None
     except Exception as e:
         print(f"      ❌ Meta parse error: {e}")
@@ -277,6 +303,9 @@ def parse_meta_agency(filepath):
             df["CTR"] = pd.to_numeric(df["CTR"], errors="coerce") / 100
         else:
             df["CTR"] = (df["Clicks"] / df["Impressions"]).where(df["Impressions"] > 0, other=None)
+
+        # Video metrics — Meta's first-stage view is the 3-second play.
+        _extract_video_cols(df, views_source_col="3-second video plays")
 
         return std_cols(df), None
     except Exception as e:
@@ -585,6 +614,9 @@ def parse_tiktok(filepath):
                 imp = pd.to_numeric(df.get("Impressions"), errors="coerce")
                 df["CTR"] = (df["Clicks"] / imp).where(imp > 0, other=None)
 
+            # Video metrics — TikTok's first-stage view is the 2-sec "Views" column.
+            _extract_video_cols(df, views_source_col="Views")
+
             frames.append(std_cols(df))
 
         else:
@@ -869,6 +901,71 @@ def parse_wechat(filepath):
         return empty_df(), str(e)
 
 
+# ── DV360 (YouTube) ───────────────────────────────────────────────────────────
+
+def parse_dv360(filepath):
+    """
+    Parse DV360 export for YouTube media.
+    Columns: Date, Country, Campaign Name, Ad Set Name, Ad Name,
+             Cost (AUD), Clicks, Impressions, Views,
+             Video plays at 25/50/75/100%
+    Channel is YouTube — DV360 is the source platform.
+    """
+    try:
+        xl = pd.ExcelFile(filepath)
+        sheet = xl.sheet_names[0]
+        for s in xl.sheet_names:
+            sl = s.lower()
+            if sl in ("data", "daily", "raw"):
+                sheet = s; break
+        df = xl.parse(sheet)
+        xl.close()
+
+        df.columns = [str(c).strip() for c in df.columns]
+
+        if "Country" in df.columns:
+            df["Country"] = df["Country"].astype(str).str.strip().str.upper()
+            df = df[df["Country"].isin(APAC_COUNTRIES)]
+
+        df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+        df = df[df["Date"].notna()].copy()
+        df["Date"] = df["Date"].dt.date
+
+        if df.empty:
+            raise ValueError("No valid APAC rows found.")
+
+        df["Channel"]       = YOUTUBE_CHANNEL
+        df["Channel_Group"] = get_channel_group(YOUTUBE_CHANNEL)
+        df["QL"]            = None
+        df["FT"]            = None
+        df["Date_Added"]    = None
+        df["Date_Modified"] = None
+
+        df["Impressions"] = pd.to_numeric(df.get("Impressions"), errors="coerce")
+        df["Clicks"]      = pd.to_numeric(df.get("Clicks"),      errors="coerce")
+        df["Spend (AUD)"] = pd.to_numeric(df.get("Cost (AUD)"),  errors="coerce")
+
+        imp = df["Impressions"]
+        df["CTR"] = (df["Clicks"] / imp).where(imp > 0, other=None)
+
+        # Campaign = Campaign Name | Ad Set Name; Creative = Ad Name
+        camp = df["Campaign Name"].astype(str) if "Campaign Name" in df.columns else pd.Series([""] * len(df), index=df.index)
+        if "Ad Set Name" in df.columns:
+            df["Campaign"] = camp + " | " + df["Ad Set Name"].astype(str)
+        else:
+            df["Campaign"] = camp
+        df["Creative"] = df["Ad Name"].astype(str) if "Ad Name" in df.columns else None
+
+        # Video metrics — DV360's first-stage view is "Views".
+        _extract_video_cols(df, views_source_col="Views")
+
+        return std_cols(df), None
+
+    except Exception as e:
+        print(f"      ❌ DV360 parse error: {e}")
+        return empty_df(), str(e)
+
+
 # ── AFFILIATES ────────────────────────────────────────────────────────────────
 
 def parse_affiliate(filepath):
@@ -1092,6 +1189,7 @@ def parse_all():
         "Kuaishou"         : ("kuaishou",     parse_kuaishou),
         "TA Media"         : ("ta_media",     parse_ta_media),
         "WeChat"           : ("wechat",       parse_wechat),
+        "YouTube (DV360)"  : ("dv360",        parse_dv360),
         "Affiliates"       : ("affiliates",   parse_affiliate),
     }
 
